@@ -67,7 +67,8 @@ static _Accum x;
 static _Accum y;
 static _Accum vx;
 static _Accum vy;
-static int i = 0;
+static int i, j;
+_Accum close_dx, close_dy;
 _Accum turnfactor = 0.2;
 _Accum visualRange = 20;
 _Accum protectedRange = 2;
@@ -145,6 +146,17 @@ static PT_THREAD (protothread_anim(struct pt *pt))
          int begin_time = PT_GET_TIME();   
          for ( i = 0; i < boid_num; i++) {
             tft_fillCircle(boid_arr[i].x, boid_arr[i].y, 2, ILI9340_BLACK);
+            close_dx = int2Accum(0);
+            close_dy = int2Accum(0);
+            
+            for ( j = 0; j < boid_num; j++ ) { // looping through every other boid
+              if ( i == j ) {
+                  next
+              }              
+            }
+            
+            
+            
             if (boid_arr[i].x > top_screen - topmargin) {
                 boid_arr[i].vx = boid_arr[i].vx - turnfactor; 
             } 
