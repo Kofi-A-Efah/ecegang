@@ -23,7 +23,7 @@
 // fixed point types
 #include <stdfix.h>
 ////////////////////////////////////
-#define boid_num 10
+#define boid_num 25
 
 
 /* Demo code for interfacing TFT (ILI9340 controller) to PIC32
@@ -63,14 +63,16 @@ typedef struct boid {
 // Array of Boids
 boid_t boid_arr[boid_num];
 // Parameters
-static _Accum x;
-static _Accum y;
+static int x;
+static int y;
 static _Accum vx;
 static _Accum vy;
 static int i, j;
 _Accum tempDistance;
-_Accum dx, dy;
-_Accum close_dx, close_dy;
+_Accum dx;
+_Accum dy;
+_Accum close_dx;
+_Accum close_dy;
 _Accum xpos_avg;
 _Accum ypos_avg;
 _Accum xvel_avg;
@@ -78,9 +80,9 @@ _Accum yvel_avg;
 _Accum divspeed;
 _Accum speed;
 _Accum neighboring_boids;
-_Accum turnfactor = 0.25;
-_Accum visualRange = 400; // 20
-_Accum protectedRange = 16; // 2 squared
+_Accum turnfactor = 0.69;
+_Accum visualRange = 20; // 20
+_Accum protectedRange = 4; // 2 squared
 _Accum centeringfactor = 0.0005;
 _Accum avoidfactor = 0.05;
 _Accum matchingfactor = 0.01;
@@ -160,6 +162,9 @@ static PT_THREAD (protothread_anim(struct pt *pt))
       while(1) {
         // yield time 1 second
          int begin_time = PT_GET_TIME();   
+         
+         //start boid loop
+         
          for ( i = 0; i < boid_num; i++) {
             if (boid_arr[i].x < top_screen && boid_arr[i].x >= 0 && 
                 boid_arr[i].y < right_screen && boid_arr[i].y >= 0)
@@ -171,7 +176,8 @@ static PT_THREAD (protothread_anim(struct pt *pt))
             xpos_avg = int2Accum(0);
             ypos_avg = int2Accum(0);
             neighboring_boids = int2Accum(0);
-            tempDistance = 0; 
+            tempDistance = 0;
+            
             //check all other boids
             if (boid_arr[i].x < top_screen && boid_arr[i].x >= 0 && 
                     boid_arr[i].y < right_screen && boid_arr[i].y >= 0){
@@ -179,44 +185,45 @@ static PT_THREAD (protothread_anim(struct pt *pt))
                     //if the boid is not itself
                   if ( i != j ) {
                       //get distance between boid and otherboid
-                      dx = boid_arr[j].x - boid_arr[i].x;
-                      dy = boid_arr[j].y - boid_arr[i].y;
-                      tempDistance = dx * dx + dy * dy;
+                        dx = boid_arr[j].x - boid_arr[i].x;
+                        dy = boid_arr[j].y - boid_arr[i].y;
                         if ( dx < visualRange && dy < visualRange ) {
-                            
-                        }      
-                      //avoidance code
-                      if (tempDistance <= protectedRange){
-                          close_dx += boid_arr[i].x - boid_arr[j].x;
-                          close_dy += boid_arr[i].y - boid_arr[j].y;
-                      }
-                      //alignment code
-                      if (tempDistance <= visualRange){
+                          tempDistance = dx * dx + dy * dy;
+                        
+                        
+                        //Avoidance Code
+                        if (tempDistance <= protectedRange*protectedRange){
+                            close_dx += boid_arr[i].x - boid_arr[j].x;
+                            close_dy += boid_arr[i].y - boid_arr[j].y;
+                        }
+                        
+                          
+                        //alignment code
+                        else if (tempDistance < visualRange*visualRange) {
                           neighboring_boids += 1;
                           xpos_avg += boid_arr[j].x;
                           ypos_avg += boid_arr[j].y;                          
                           xvel_avg += boid_arr[j].vx;
-                          yvel_avg += boid_arr[j].vy;
-                      }
+                          yvel_avg += boid_arr[j].vy;   
+                        }
+                            
+                        }      
                       
-
                     }              
                 }
             }
             
+            //stop checking other boids
 
-            //           if(close_dx > 0){
-//            tft_fillRoundRect(0,220, 40, 230, 1, ILI9340_BLACK);// x,y,w,h,radius,color
-//             tft_setCursor(0, 220);
-//            tft_setTextColor(ILI9340_YELLOW); tft_setTextSize(1);
-//            sprintf(buffer,"%d", close_dx);
-//             tft_writeString(buffer);
-//           }
+           //avoidance stuff
            boid_arr[i].vx += close_dx * avoidfactor;
            boid_arr[i].vy += close_dy * avoidfactor;
+           
            if (neighboring_boids != 0) {
               neighboring_boids = 1/neighboring_boids;
            }
+           
+           //alignment stuff
            boid_arr[i].vx += xvel_avg * neighboring_boids * matchingfactor;
            boid_arr[i].vy += yvel_avg * neighboring_boids * matchingfactor;
            if (neighboring_boids > 0) {
@@ -264,14 +271,17 @@ static PT_THREAD (protothread_anim(struct pt *pt))
             }           
 
                     
-            boid_arr[i].x = (int)(boid_arr[i].x + boid_arr[i].vx); 
-            boid_arr[i].y = (int)(boid_arr[i].y + boid_arr[i].vy); 
+            boid_arr[i].x = (_Accum)(boid_arr[i].x + boid_arr[i].vx); 
+            boid_arr[i].y = (_Accum)(boid_arr[i].y + boid_arr[i].vy); 
             if (boid_arr[i].x < top_screen && boid_arr[i].x >= 0 && 
                     boid_arr[i].y < right_screen && boid_arr[i].y >= 0)
             tft_drawPixel(boid_arr[i].x, boid_arr[i].y, ILI9340_GREEN);             
              
              
          }
+         
+         //end boid loop
+         
         //PT_YIELD_TIME_msec(32);
         // erase disk
          //tft_fillCircle(Accum2int(xc), Accum2int(yc), 4, ILI9340_BLACK); //x, y, radius, color
