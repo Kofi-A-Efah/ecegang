@@ -71,7 +71,7 @@ def PIC_serial_recv(ser_str, window):
 # ############################ Begin GUI code #############################
 # open microcontroller serial port
 # For windows the device will be 'COMx'
-ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=0.001)  # open serial port 38400
+ser = serial.Serial('COM4', 38400, timeout=0.001)  # open serial port 38400
 
 #sg.theme('DarkAmber')   # Add a touch of color
 # All the stuff inside your window.
@@ -102,23 +102,23 @@ heading_color = '#2FB8AD'
 layout = [  [sg.Text('Flock Control',  background_color=heading_color)],
             #
             [sg.Text('Protected Range'),
-            sg.Slider(range=(0,100), default_value=0, size=(22,15), key='slider1',
+            sg.Slider(range=(0,100), default_value=2, size=(22,15), key='slider1',
              orientation='horizontal', font=('Helvetica', 12),enable_events=True)],
             #
             [sg.Text('Visual Range'),
-             sg.Slider(range=(0,200), default_value=400, size=(22,15), key='slider2', 
+             sg.Slider(range=(0,200), default_value=20, size=(22,15), key='slider2', 
              orientation='horizontal', font=('Helvetica', 12),enable_events=True)],
             #
             [sg.Text('   Centering Factor '),
-             sg.Slider(range=(0.0002,1.00), default_value=0, size=(22,15), key='slider3', resolution=0.01,
+             sg.Slider(range=(1.00,5000.00), default_value=2000, size=(22,15), key='slider3', resolution=0.01,
              orientation='horizontal', font=('Helvetica', 12),enable_events=True)],
             #
             [sg.Text('   Avoidance Factor '),
-             sg.Slider(range=(0.01,1.00), default_value=0, size=(22,15), key='slider4', resolution=0.01,
+             sg.Slider(range=(0.01,1.00), default_value=0.05, size=(22,15), key='slider4', resolution=0.01,
              orientation='horizontal', font=('Helvetica', 12),enable_events=True)],
             #
              [sg.Text('   Matching Factor '),
-             sg.Slider(range=(0.01,1.00), default_value=0, size=(22,15), key='slider5', resolution=0.01,
+             sg.Slider(range=(0.01,1.00), default_value=0.05, size=(22,15), key='slider5', resolution=0.01,
              orientation='horizontal', font=('Helvetica', 12),enable_events=True)],
             #
             [sg.Text('Serial data to PIC', background_color=heading_color)],
@@ -157,8 +157,8 @@ window = sg.Window('ECE4760 Interface', layout, location=(0,0),
 
 # Bind the realtime button release events <ButtonRelease-1>
 # https://github.com/PySimpleGUI/PySimpleGUI/issues/2020
-window['pushbut01'].bind('<ButtonRelease-1>', 'r')
-window['pushbut02'].bind('<ButtonRelease-1>', 'r')
+#window['pushbut01'].bind('<ButtonRelease-1>', 'r')
+#window['pushbut02'].bind('<ButtonRelease-1>', 'r')
 
 # Event Loop to process "events" 
 # event is set by window.read

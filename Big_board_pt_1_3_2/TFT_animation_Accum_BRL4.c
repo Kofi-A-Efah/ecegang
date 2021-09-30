@@ -23,7 +23,7 @@
 // fixed point types
 #include <stdfix.h>
 ////////////////////////////////////
-#define boid_num 25
+#define boid_num 60
 
 
 /* Demo code for interfacing TFT (ILI9340 controller) to PIC32
@@ -52,7 +52,7 @@ char buffer[60];
 // === thread structures ============================================
 // thread control structs
 // note that UART input and output are threads
-static struct pt pt_timer, pt_color, pt_anim;
+static struct pt pt_timer, pt_color, pt_anim, pt_serial, pt_slider;
 
 typedef struct boid {
     _Accum x;
@@ -80,12 +80,12 @@ _Accum yvel_avg;
 _Accum divspeed;
 _Accum speed;
 _Accum neighboring_boids;
-_Accum turnfactor = 0.69;
-_Accum visualRange = 20; // 20
-_Accum protectedRange = 4; // 2 squared
+_Accum turnfactor = 0.2;
+_Accum visualRange = 50; // 20
+_Accum protectedRange = 2; // 2 squared
 _Accum centeringfactor = 0.0005;
 _Accum avoidfactor = 0.05;
-_Accum matchingfactor = 0.01;
+_Accum matchingfactor = 0.05;
 _Accum maxspeed = 3;
 _Accum minspeed = 2;
 int topmargin = 50;
@@ -97,6 +97,10 @@ const int right_screen = 320;
 // system 1 second interval tick
 int sys_time_seconds ;
 static int end_time; 
+char new_slider = 0;
+int slider_id;
+float slider_value ; // value could be large
+char receive_string[64];
 
 // === Timer Thread =================================================
 // update a 1 second tick counter
@@ -117,6 +121,13 @@ static PT_THREAD (protothread_timer(struct pt *pt))
         tft_setTextColor(ILI9340_YELLOW); tft_setTextSize(2);
         sprintf(buffer,"%d", sys_time_seconds);
         tft_writeString(buffer); 
+        
+        tft_fillRect(0,0, 120, 14, ILI9340_BLACK);// x,y,w,h,radius,color
+        tft_setCursor(0, 0);
+        tft_setTextColor(ILI9340_WHITE);  tft_setTextSize(1);
+        tft_writeString("Frame Rate: ");
+        sprintf(buffer, "%d", end_time); 
+        tft_writeString(buffer);
         // NEVER exit while
       } // END WHILE(1)
   PT_END(pt);
@@ -297,19 +308,118 @@ static PT_THREAD (protothread_anim(struct pt *pt))
          //tft_drawPixel(boid.x, boid.y, ILI9340_GREEN); 
         
         end_time = PT_GET_TIME() - begin_time; 
-
-        tft_fillRect(0,0, 120, 14, ILI9340_BLACK);// x,y,w,h,radius,color
-        tft_setCursor(0, 0);
-        tft_setTextColor(ILI9340_WHITE);  tft_setTextSize(1);
-        tft_writeString("Frame Rate: ");
-        sprintf(buffer, "%d", end_time); 
-        tft_writeString(buffer);
-        PT_YIELD_TIME_msec(33); 
+        PT_YIELD_TIME_msec(33 - end_time); 
         // NEVER exit while
       } // END WHILE(1)
   PT_END(pt);
 } // animation thread
-
+//sliders thread 
+static PT_THREAD (protothread_sliders(struct pt *pt))
+{
+    PT_BEGIN(pt);
+    while(1){
+        PT_YIELD_UNTIL(pt, new_slider==1);
+        // clear flag
+        new_slider = 0; 
+        if (slider_id == 1){
+           protectedRange = (_Accum)(slider_value); 
+        }
+        
+        if (slider_id==2 ){
+            visualRange = (_Accum)(slider_value);
+        }
+        if (slider_id==3 ){
+            centeringfactor = (_Accum)(1/slider_value); 
+        }
+        if (slider_id == 4){
+            avoidfactor = (_Accum)(slider_value);
+        }
+        if (slider_id == 5){
+            matchingfactor = (_Accum)(slider_value);
+        }
+    } // END WHILE(1)   
+    PT_END(pt);  
+} // thread slider
+//serial thread 
+static PT_THREAD (protothread_serial(struct pt *pt))
+{
+    PT_BEGIN(pt);
+    static char junk;
+    //   
+    //
+    while(1){
+        // There is no YIELD in this loop because there are
+        // YIELDS in the spawned threads that determine the 
+        // execution rate while WAITING for machine input
+        // =============================================
+        // NOTE!! -- to use serial spawned functions
+        // you MUST edit config_1_3_2 to
+        // (1) uncomment the line -- #define use_uart_serial
+        // (2) SET the baud rate to match the PC terminal
+        // =============================================
+        
+        // now wait for machine input from python
+        // Terminate on the usual <enter key>
+        PT_terminate_char = '\r' ; 
+        PT_terminate_count = 0 ; 
+        PT_terminate_time = 0 ;
+        // note that there will NO visual feedback using the following function
+        PT_SPAWN(pt, &pt_input, PT_GetMachineBuffer(&pt_input) );
+        
+        // Parse the string from Python
+        // There can be toggle switch, button, slider, and string events
+        
+        // toggle switch
+//        if (PT_term_buffer[0]=='t'){
+//            // signal the button thread
+//            new_toggle = 1;
+//            // subtracting '0' converts ascii to binary for 1 character
+//            toggle_id = (PT_term_buffer[1] - '0')*10 + (PT_term_buffer[2] - '0');
+//            toggle_value = PT_term_buffer[3] - '0';
+//        }
+        
+        // pushbutton
+//        if (PT_term_buffer[0]=='b'){
+//            // signal the button thread
+//            new_button = 1;
+//            // subtracting '0' converts ascii to binary for 1 character
+//            button_id = (PT_term_buffer[1] - '0')*10 + (PT_term_buffer[2] - '0');
+//            button_value = PT_term_buffer[3] - '0';
+//        }
+        
+        // slider
+        if (PT_term_buffer[0]=='s'){
+            sscanf(PT_term_buffer, "%c %d %f", &junk, &slider_id, &slider_value);
+            new_slider = 1;
+        }
+        
+        // listbox
+//        if (PT_term_buffer[0]=='l'){
+//            new_list = 1;
+//            list_id = PT_term_buffer[2] - '0' ;
+//            list_value = PT_term_buffer[3] - '0';
+//            //printf("%d %d", list_id, list_value);
+//        }
+        
+        // radio group
+//        if (PT_term_buffer[0]=='r'){
+//            new_radio = 1;
+//            radio_group_id = PT_term_buffer[2] - '0' ;
+//            radio_member_id = PT_term_buffer[3] - '0';
+//            //printf("%d %d", radio_group_id, radio_member_id);
+//        }
+        
+        // string from python input line
+//        if (PT_term_buffer[0]=='$'){
+//            // signal parsing thread
+//            new_string = 1;
+//            // output to thread which parses the string
+//            // while striping off the '$'
+//            strcpy(receive_string, PT_term_buffer+1);
+//        }                                  
+    } // END WHILE(1)   
+    PT_END(pt);  
+} 
 // === Main  ======================================================
 void main(void) {
  //SYSTEMConfigPerformance(PBCLK);
@@ -325,8 +435,10 @@ void main(void) {
 
   // init the threads
   PT_INIT(&pt_timer);
-  PT_INIT(&pt_color);
+  //PT_INIT(&pt_color);
   PT_INIT(&pt_anim);
+  PT_INIT(&pt_serial);
+  PT_INIT((&pt_slider));
 
   // init the display
   tft_init_hw();
@@ -344,6 +456,8 @@ void main(void) {
   while (1){
       PT_SCHEDULE(protothread_timer(&pt_timer));
       PT_SCHEDULE(protothread_anim(&pt_anim));
+      PT_SCHEDULE(protothread_serial(&pt_serial));
+      PT_SCHEDULE(protothread_sliders(&pt_slider));
       }
   } // main
 
