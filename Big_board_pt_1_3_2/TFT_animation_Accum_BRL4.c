@@ -68,13 +68,22 @@ static _Accum y;
 static _Accum vx;
 static _Accum vy;
 static int i, j;
+_Accum tempDistance;
+_Accum dx, dy;
 _Accum close_dx, close_dy;
-_Accum turnfactor = 0.2;
-_Accum visualRange = 20;
-_Accum protectedRange = 2;
+_Accum xpos_avg;
+_Accum ypos_avg;
+_Accum xvel_avg;
+_Accum yvel_avg;
+_Accum divspeed;
+_Accum speed;
+_Accum neighboring_boids;
+_Accum turnfactor = 0.25;
+_Accum visualRange = 400; // 20
+_Accum protectedRange = 16; // 2 squared
 _Accum centeringfactor = 0.0005;
 _Accum avoidfactor = 0.05;
-_Accum matchingfactor = 0.05;
+_Accum matchingfactor = 0.01;
 _Accum maxspeed = 3;
 _Accum minspeed = 2;
 int topmargin = 50;
@@ -118,6 +127,11 @@ static PT_THREAD (protothread_timer(struct pt *pt))
 #define Accum2float(a) ((float)(a))
 #define int2Accum(a) ((_Accum)(a))
 #define Accum2int(a) ((int)(a))
+
+_Accum accabs(_Accum a) {
+    return a < 0 ? int2Accum(-1)*a : a;
+}
+
 //static _Accum xc=int2Accum(10), yc=int2Accum(150), vxc=int2Accum(2), vyc=0;
 //static _Accum g = float2Accum(0.1), drag = float2Accum(.01);
 
@@ -138,46 +152,122 @@ static PT_THREAD (protothread_anim(struct pt *pt))
     //boid_one = {x, y, vx, vy};
     tft_setCursor(120, 0);
     tft_setTextColor(ILI9340_WHITE);  tft_setTextSize(1);
-    tft_writeString("Number of Boids: 1");
+    //static   boidNumString = "Number of Boids: " + boid_num;
+    //tft_writeString(boidNumString);
     //sprintf(buffer, "%d", end_time); 
+    
     tft_writeString(buffer);
       while(1) {
         // yield time 1 second
          int begin_time = PT_GET_TIME();   
          for ( i = 0; i < boid_num; i++) {
-            tft_fillCircle(boid_arr[i].x, boid_arr[i].y, 2, ILI9340_BLACK);
+            if (boid_arr[i].x < top_screen && boid_arr[i].x >= 0 && 
+                boid_arr[i].y < right_screen && boid_arr[i].y >= 0)
+              tft_fillCircle(boid_arr[i].x, boid_arr[i].y, 2, ILI9340_BLACK);
             close_dx = int2Accum(0);
             close_dy = int2Accum(0);
-            
-            for ( j = 0; j < boid_num; j++ ) { // looping through every other boid
-              if ( i == j ) {
-                  next
-              }              
+            xvel_avg = int2Accum(0);
+            yvel_avg = int2Accum(0);
+            xpos_avg = int2Accum(0);
+            ypos_avg = int2Accum(0);
+            neighboring_boids = int2Accum(0);
+            tempDistance = 0; 
+            //check all other boids
+            if (boid_arr[i].x < top_screen && boid_arr[i].x >= 0 && 
+                    boid_arr[i].y < right_screen && boid_arr[i].y >= 0){
+                for ( j = 0; j < boid_num; j++ ) { // looping through every other boid
+                    //if the boid is not itself
+                  if ( i != j ) {
+                      //get distance between boid and otherboid
+                      dx = boid_arr[j].x - boid_arr[i].x;
+                      dy = boid_arr[j].y - boid_arr[i].y;
+                      tempDistance = dx * dx + dy * dy;
+                        if ( dx < visualRange && dy < visualRange ) {
+                            
+                        }      
+                      //avoidance code
+                      if (tempDistance <= protectedRange){
+                          close_dx += boid_arr[i].x - boid_arr[j].x;
+                          close_dy += boid_arr[i].y - boid_arr[j].y;
+                      }
+                      //alignment code
+                      if (tempDistance <= visualRange){
+                          neighboring_boids += 1;
+                          xpos_avg += boid_arr[j].x;
+                          ypos_avg += boid_arr[j].y;                          
+                          xvel_avg += boid_arr[j].vx;
+                          yvel_avg += boid_arr[j].vy;
+                      }
+                      
+
+                    }              
+                }
             }
             
+
+            //           if(close_dx > 0){
+//            tft_fillRoundRect(0,220, 40, 230, 1, ILI9340_BLACK);// x,y,w,h,radius,color
+//             tft_setCursor(0, 220);
+//            tft_setTextColor(ILI9340_YELLOW); tft_setTextSize(1);
+//            sprintf(buffer,"%d", close_dx);
+//             tft_writeString(buffer);
+//           }
+           boid_arr[i].vx += close_dx * avoidfactor;
+           boid_arr[i].vy += close_dy * avoidfactor;
+           if (neighboring_boids != 0) {
+              neighboring_boids = 1/neighboring_boids;
+           }
+           boid_arr[i].vx += xvel_avg * neighboring_boids * matchingfactor;
+           boid_arr[i].vy += yvel_avg * neighboring_boids * matchingfactor;
+           if (neighboring_boids > 0) {
+              xpos_avg = xpos_avg*neighboring_boids;
+              ypos_avg = ypos_avg*neighboring_boids;  
+            }
+            boid_arr[i].vx += (xpos_avg - boid_arr[i].x)*centeringfactor;
+            boid_arr[i].vy += (ypos_avg - boid_arr[i].y)*centeringfactor;
             
             
             if (boid_arr[i].x > top_screen - topmargin) {
-                boid_arr[i].vx = boid_arr[i].vx - turnfactor; 
+                boid_arr[i].vx -= turnfactor; 
             } 
             if (boid_arr[i].y > right_screen - rightmargin){
-                boid_arr[i].vy = boid_arr[i].vy - turnfactor; 
+                boid_arr[i].vy -= turnfactor; 
             }
             if (boid_arr[i].y < leftmargin) {
-                boid_arr[i].vy = boid_arr[i].vy + turnfactor;
+                boid_arr[i].vy += turnfactor;
             }
             if (boid_arr[i].x < bottommargin){
-                boid_arr[i].vx = boid_arr[i].vx + turnfactor;
+                boid_arr[i].vx += turnfactor;
             }
 
-            if (boid_arr[i].vx > maxspeed) boid_arr[i].vx = maxspeed; 
-            if (boid_arr[i].vx > minspeed) boid_arr[i].vx = minspeed; 
-            if (boid_arr[i].vy > maxspeed) boid_arr[i].vy = maxspeed; 
-            if (boid_arr[i].vy > minspeed) boid_arr[i].vy = minspeed;
+            if (accabs(boid_arr[i].vx) > accabs(boid_arr[i].vy)) {
+                speed = accabs(boid_arr[i].vx) + (accabs(boid_arr[i].vy) >> 2);
+            }
+            else {
+                speed = accabs(boid_arr[i].vy) + (accabs(boid_arr[i].vx) >> 2);
+            }
+            
+            if (speed != 0){
+                divspeed = 1/speed;
+            } 
+            else {
+                divspeed = 0; 
+            }
+            
+            if (speed < minspeed) {
+                boid_arr[i].vx = boid_arr[i].vx * divspeed * minspeed;
+                boid_arr[i].vy = boid_arr[i].vy * divspeed * minspeed;
+            }
+            if (speed > maxspeed) {
+                boid_arr[i].vx = boid_arr[i].vx * divspeed * maxspeed;
+                boid_arr[i].vy = boid_arr[i].vy * divspeed * maxspeed;
+            }           
 
-
+                    
             boid_arr[i].x = (int)(boid_arr[i].x + boid_arr[i].vx); 
             boid_arr[i].y = (int)(boid_arr[i].y + boid_arr[i].vy); 
+            if (boid_arr[i].x < top_screen && boid_arr[i].x >= 0 && 
+                    boid_arr[i].y < right_screen && boid_arr[i].y >= 0)
             tft_drawPixel(boid_arr[i].x, boid_arr[i].y, ILI9340_GREEN);             
              
              
