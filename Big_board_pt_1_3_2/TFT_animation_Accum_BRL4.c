@@ -23,7 +23,7 @@
 // fixed point types
 #include <stdfix.h>
 ////////////////////////////////////
-#define boid_num 30
+#define boid_num 125
 
 
 /* Demo code for interfacing TFT (ILI9340 controller) to PIC32
@@ -67,6 +67,7 @@ typedef struct boid {
 	_Accum yvel_avg;
 	_Accum neighboring_boids;
 	int notReset;
+    int oddEven;
 }boid_t;
 // Array of Boids
 boid_t boid_arr[boid_num];
@@ -92,7 +93,8 @@ _Accum divspeed;
 _Accum speed;
 _Accum turnfactor = 0.2;
 _Accum visualRange = 20; // 20
-_Accum protectedRange = 2; // 2 squared
+_Accum SqvisualRange = 400; 
+_Accum protectedRange = 4; // 2 squared
 _Accum centeringfactor = 0.0005;
 _Accum avoidfactor = 0.05;
 _Accum matchingfactor = 0.05;
@@ -104,6 +106,8 @@ int leftmargin = 50;
 int rightmargin = 50; 
 const int top_screen = 240; 
 const int right_screen = 320; 
+int topbound; 
+int rightbound; 
 // system 1 second interval tick
 int sys_time_seconds ;
 static int end_time; 
@@ -159,9 +163,10 @@ static PT_THREAD (protothread_timer(struct pt *pt))
 #define Accum2float(a) ((float)(a))
 #define int2Accum(a) ((_Accum)(a))
 #define Accum2int(a) ((int)(a))
+//#define accabs(a) ((a >= 0) ? a : -a) 
 
 _Accum accabs(_Accum a) {
-    return a < 0 ? int2Accum(-1)*a : a;
+    return a < 0 ? -a : a;
 }
 
 //static _Accum xc=int2Accum(10), yc=int2Accum(150), vxc=int2Accum(2), vyc=0;
@@ -187,6 +192,7 @@ static PT_THREAD (protothread_anim(struct pt *pt))
 		boid_arr[i].xpos_avg = 0;
 		boid_arr[i].ypos_avg = 0;
 		boid_arr[i].notReset = 0;
+        boid_arr[i].oddEven = 0;
     }
     //boid_one = {x, y, vx, vy};
     tft_setCursor(120, 0);
@@ -196,6 +202,8 @@ static PT_THREAD (protothread_anim(struct pt *pt))
     //sprintf(buffer, "%d", end_time); 
     
     tft_writeString(buffer);
+    topbound = top_screen - topmargin;
+    rightbound = right_screen - rightmargin; 
       while(1) {
         // yield time 1 second
          int begin_time = PT_GET_TIME();   
@@ -229,7 +237,7 @@ static PT_THREAD (protothread_anim(struct pt *pt))
 				// looping through every other boid
 				//in this loop we do not recheck previous boids since their data
 				//has already been used to update other boids		
-                for ( j = i + 1; j < boid_num; j++ ) { 
+                for ( j = i + 1 + boid_arr[i].oddEven; j < boid_num; j = j + 2) { 
 				
 				  //get distance between boid and otherboid
 					dx = accabs(boid_arr[j].x - boid_arr[i].x);
@@ -239,7 +247,7 @@ static PT_THREAD (protothread_anim(struct pt *pt))
 						
 						
 						//Avoidance Code
-						if (tempDistance <= protectedRange*protectedRange){
+						if (tempDistance <= protectedRange){
 							//update boid
 							boid_arr[i].close_dx += boid_arr[i].x - boid_arr[j].x;
 							boid_arr[i].close_dy += boid_arr[i].y - boid_arr[j].y;
@@ -260,7 +268,7 @@ static PT_THREAD (protothread_anim(struct pt *pt))
 						
 						  
 						//alignment code
-						else if (tempDistance < visualRange*visualRange) {
+						else if (tempDistance < SqvisualRange) {
 							//update boid
 							boid_arr[i].neighboring_boids += 1;
 							boid_arr[i].xpos_avg += boid_arr[j].x;
@@ -310,10 +318,10 @@ static PT_THREAD (protothread_anim(struct pt *pt))
 //end of that if statement, you know the one
 //            }
             
-            if (boid_arr[i].x > top_screen - topmargin) {
+            if (boid_arr[i].x > topbound) {
                 boid_arr[i].vx -= turnfactor; 
             } 
-            if (boid_arr[i].y > right_screen - rightmargin){
+            if (boid_arr[i].y > rightbound){
                 boid_arr[i].vy -= turnfactor; 
             }
             if (boid_arr[i].y < leftmargin) {
@@ -357,6 +365,9 @@ static PT_THREAD (protothread_anim(struct pt *pt))
 			//boid no longer has reset values
 			boid_arr[i].notReset = 1;
             
+            if (boid_arr[i].oddEven) boid_arr[i].oddEven = 0;
+            else boid_arr[i].oddEven = 1;
+            
          }
          
          //end boid loop
@@ -390,11 +401,12 @@ static PT_THREAD (protothread_sliders(struct pt *pt))
         // clear flag
         new_slider = 0; 
         if (slider_id == 1){
-           protectedRange = (_Accum)(slider_value); 
+           protectedRange = (_Accum)(slider_value * slider_value); 
         }
         
         if (slider_id==2 ){
             visualRange = (_Accum)(slider_value);
+            SqvisualRange = (_Accum) (slider_value * slider_value);
         }
         if (slider_id==3 ){
             centeringfactor = (_Accum)(1/slider_value); 
