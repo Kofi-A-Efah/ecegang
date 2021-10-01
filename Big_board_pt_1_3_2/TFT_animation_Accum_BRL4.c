@@ -23,7 +23,7 @@
 // fixed point types
 #include <stdfix.h>
 ////////////////////////////////////
-#define boid_num 60
+#define boid_num 30
 
 
 /* Demo code for interfacing TFT (ILI9340 controller) to PIC32
@@ -59,6 +59,14 @@ typedef struct boid {
     _Accum y;
     _Accum vx;
     _Accum vy; 
+	_Accum close_dx;
+	_Accum close_dy;
+	_Accum xpos_avg;
+	_Accum ypos_avg;
+	_Accum xvel_avg;
+	_Accum yvel_avg;
+	_Accum neighboring_boids;
+	int notReset;
 }boid_t;
 // Array of Boids
 boid_t boid_arr[boid_num];
@@ -71,17 +79,19 @@ static int i, j;
 _Accum tempDistance;
 _Accum dx;
 _Accum dy;
+/*
 _Accum close_dx;
 _Accum close_dy;
 _Accum xpos_avg;
 _Accum ypos_avg;
 _Accum xvel_avg;
 _Accum yvel_avg;
+_Accum neighboring_boids;
+*/
 _Accum divspeed;
 _Accum speed;
-_Accum neighboring_boids;
 _Accum turnfactor = 0.2;
-_Accum visualRange = 50; // 20
+_Accum visualRange = 20; // 20
 _Accum protectedRange = 2; // 2 squared
 _Accum centeringfactor = 0.0005;
 _Accum avoidfactor = 0.05;
@@ -116,7 +126,7 @@ static PT_THREAD (protothread_timer(struct pt *pt))
         sys_time_seconds++ ;
         
         // draw sys_time
-        tft_fillRoundRect(0,15, 100, 14, 1, ILI9340_BLACK);// x,y,w,h,radius,color
+        tft_fillRoundRect(0,15, 200, 14, 1, ILI9340_BLACK);// x,y,w,h,radius,color
         tft_setCursor(0, 15);
         tft_setTextColor(ILI9340_YELLOW); tft_setTextSize(2);
         sprintf(buffer,"%d", sys_time_seconds);
@@ -128,6 +138,15 @@ static PT_THREAD (protothread_timer(struct pt *pt))
         tft_writeString("Frame Rate: ");
         sprintf(buffer, "%d", end_time); 
         tft_writeString(buffer);
+        
+        tft_fillRect(0,40, 200, 14, ILI9340_BLACK);
+        tft_setCursor(0,40);
+        tft_setTextColor(ILI9340_WHITE); tft_setTextSize(1);
+        tft_writeString("Number of Boids: "); 
+        sprintf(buffer, "%d", boid_num);
+        tft_writeString(buffer);
+
+        
         // NEVER exit while
       } // END WHILE(1)
   PT_END(pt);
@@ -160,7 +179,14 @@ static PT_THREAD (protothread_anim(struct pt *pt))
         boid_arr[i].x = x;
         boid_arr[i].y = y;
         boid_arr[i].vx = vx;
-        boid_arr[i].vy = vy;     
+        boid_arr[i].vy = vy;
+		boid_arr[i].close_dx = 0;
+		boid_arr[i].close_dy = 0;
+		boid_arr[i].xvel_avg = 0;
+		boid_arr[i].yvel_avg = 0;
+		boid_arr[i].xpos_avg = 0;
+		boid_arr[i].ypos_avg = 0;
+		boid_arr[i].notReset = 0;
     }
     //boid_one = {x, y, vx, vy};
     tft_setCursor(120, 0);
@@ -177,73 +203,112 @@ static PT_THREAD (protothread_anim(struct pt *pt))
          //start boid loop
          
          for ( i = 0; i < boid_num; i++) {
+			 //clear the boid on the TFT
             if (boid_arr[i].x < top_screen && boid_arr[i].x >= 0 && 
-                boid_arr[i].y < right_screen && boid_arr[i].y >= 0)
-              tft_fillCircle(boid_arr[i].x, boid_arr[i].y, 2, ILI9340_BLACK);
-            close_dx = int2Accum(0);
-            close_dy = int2Accum(0);
-            xvel_avg = int2Accum(0);
-            yvel_avg = int2Accum(0);
-            xpos_avg = int2Accum(0);
-            ypos_avg = int2Accum(0);
-            neighboring_boids = int2Accum(0);
-            tempDistance = 0;
+                boid_arr[i].y < right_screen && boid_arr[i].y >= 0){
+				tft_drawPixel(boid_arr[i].x, boid_arr[i].y, ILI9340_BLACK); 
+				//tft_fillCircle(boid_arr[i].x, boid_arr[i].y, 2, ILI9340_BLACK);
+            }
+			
+			//reset all boid "factor" parameters
+			if (boid_arr[i].notReset){
+				boid_arr[i].close_dx = int2Accum(0);
+				boid_arr[i].close_dy = int2Accum(0);
+				boid_arr[i].xvel_avg = int2Accum(0);
+				boid_arr[i].yvel_avg = int2Accum(0);
+				boid_arr[i].xpos_avg = int2Accum(0);
+				boid_arr[i].ypos_avg = int2Accum(0);
+				boid_arr[i].neighboring_boids = int2Accum(0);
+			}
             
             //check all other boids
-            if (boid_arr[i].x < top_screen && boid_arr[i].x >= 0 && 
-                    boid_arr[i].y < right_screen && boid_arr[i].y >= 0){
-                for ( j = 0; j < boid_num; j++ ) { // looping through every other boid
-                    //if the boid is not itself
-                  if ( i != j ) {
-                      //get distance between boid and otherboid
-                        dx = boid_arr[j].x - boid_arr[i].x;
-                        dy = boid_arr[j].y - boid_arr[i].y;
-                        if ( dx < visualRange && dy < visualRange ) {
-                          tempDistance = dx * dx + dy * dy;
-                        
-                        
-                        //Avoidance Code
-                        if (tempDistance <= protectedRange*protectedRange){
-                            close_dx += boid_arr[i].x - boid_arr[j].x;
-                            close_dy += boid_arr[i].y - boid_arr[j].y;
-                        }
-                        
-                          
-                        //alignment code
-                        else if (tempDistance < visualRange*visualRange) {
-                          neighboring_boids += 1;
-                          xpos_avg += boid_arr[j].x;
-                          ypos_avg += boid_arr[j].y;                          
-                          xvel_avg += boid_arr[j].vx;
-                          yvel_avg += boid_arr[j].vy;   
-                        }
-                            
-                        }      
-                      
-                    }              
+
+//            if (boid_arr[i].x < top_screen && boid_arr[i].x >= 0 && 
+//                    boid_arr[i].y < right_screen && boid_arr[i].y >= 0){
+
+				// looping through every other boid
+				//in this loop we do not recheck previous boids since their data
+				//has already been used to update other boids		
+                for ( j = i + 1; j < boid_num; j++ ) { 
+				
+				  //get distance between boid and otherboid
+					dx = accabs(boid_arr[j].x - boid_arr[i].x);
+					dy = accabs(boid_arr[j].y - boid_arr[i].y);
+					if ( dx < visualRange && dy < visualRange ) {
+						  tempDistance = dx * dx + dy * dy;
+						
+						
+						//Avoidance Code
+						if (tempDistance <= protectedRange*protectedRange){
+							//update boid
+							boid_arr[i].close_dx += boid_arr[i].x - boid_arr[j].x;
+							boid_arr[i].close_dy += boid_arr[i].y - boid_arr[j].y;
+							//update otherboid
+							if (boid_arr[j].notReset){
+								boid_arr[j].close_dx = int2Accum(0);
+								boid_arr[j].close_dy = int2Accum(0);
+								boid_arr[j].xvel_avg = int2Accum(0);
+								boid_arr[j].yvel_avg = int2Accum(0);
+								boid_arr[j].xpos_avg = int2Accum(0);
+								boid_arr[j].ypos_avg = int2Accum(0);
+								boid_arr[j].neighboring_boids = int2Accum(0);
+								boid_arr[j].notReset = 0;
+							}
+							boid_arr[j].close_dx += boid_arr[j].x - boid_arr[i].x;
+							boid_arr[j].close_dy += boid_arr[j].y - boid_arr[i].y;
+						}
+						
+						  
+						//alignment code
+						else if (tempDistance < visualRange*visualRange) {
+							//update boid
+							boid_arr[i].neighboring_boids += 1;
+							boid_arr[i].xpos_avg += boid_arr[j].x;
+							boid_arr[i].ypos_avg += boid_arr[j].y;                          
+							boid_arr[i].xvel_avg += boid_arr[j].vx;
+							boid_arr[i].yvel_avg += boid_arr[j].vy;
+							//update otherboid
+							if (boid_arr[j].notReset){
+								boid_arr[j].close_dx = int2Accum(0);
+								boid_arr[j].close_dy = int2Accum(0);
+								boid_arr[j].xvel_avg = int2Accum(0);
+								boid_arr[j].yvel_avg = int2Accum(0);
+								boid_arr[j].xpos_avg = int2Accum(0);
+								boid_arr[j].ypos_avg = int2Accum(0);
+								boid_arr[j].neighboring_boids = int2Accum(0);
+								boid_arr[j].notReset = 0;
+							}
+							boid_arr[j].neighboring_boids += 1;
+							boid_arr[j].xpos_avg += boid_arr[i].x;
+							boid_arr[j].ypos_avg += boid_arr[i].y;                          
+							boid_arr[j].xvel_avg += boid_arr[i].vx;
+							boid_arr[j].yvel_avg += boid_arr[i].vy; 
+						}
+					}                     
                 }
-            }
             
             //stop checking other boids
 
            //avoidance stuff
-           boid_arr[i].vx += close_dx * avoidfactor;
-           boid_arr[i].vy += close_dy * avoidfactor;
+           boid_arr[i].vx += boid_arr[i].close_dx * avoidfactor;
+           boid_arr[i].vy += boid_arr[i].close_dy * avoidfactor;
            
-           if (neighboring_boids != 0) {
-              neighboring_boids = 1/neighboring_boids;
+           if (boid_arr[i].neighboring_boids != 0) {
+              boid_arr[i].neighboring_boids = 1/boid_arr[i].neighboring_boids;
            }
            
            //alignment stuff
-           boid_arr[i].vx += xvel_avg * neighboring_boids * matchingfactor;
-           boid_arr[i].vy += yvel_avg * neighboring_boids * matchingfactor;
-           if (neighboring_boids > 0) {
-              xpos_avg = xpos_avg*neighboring_boids;
-              ypos_avg = ypos_avg*neighboring_boids;  
+           boid_arr[i].vx += boid_arr[i].xvel_avg * boid_arr[i].neighboring_boids * matchingfactor;
+           boid_arr[i].vy += boid_arr[i].yvel_avg * boid_arr[i].neighboring_boids * matchingfactor;
+           if (boid_arr[i].neighboring_boids > 0) {
+              boid_arr[i].xpos_avg = boid_arr[i].xpos_avg*boid_arr[i].neighboring_boids;
+              boid_arr[i].ypos_avg = boid_arr[i].ypos_avg*boid_arr[i].neighboring_boids;  
             }
-            boid_arr[i].vx += (xpos_avg - boid_arr[i].x)*centeringfactor;
-            boid_arr[i].vy += (ypos_avg - boid_arr[i].y)*centeringfactor;
-            
+            boid_arr[i].vx += (boid_arr[i].xpos_avg - boid_arr[i].x)*centeringfactor;
+            boid_arr[i].vy += (boid_arr[i].ypos_avg - boid_arr[i].y)*centeringfactor;            
+
+//end of that if statement, you know the one
+//            }
             
             if (boid_arr[i].x > top_screen - topmargin) {
                 boid_arr[i].vx -= turnfactor; 
@@ -285,10 +350,13 @@ static PT_THREAD (protothread_anim(struct pt *pt))
             boid_arr[i].x = (_Accum)(boid_arr[i].x + boid_arr[i].vx); 
             boid_arr[i].y = (_Accum)(boid_arr[i].y + boid_arr[i].vy); 
             if (boid_arr[i].x < top_screen && boid_arr[i].x >= 0 && 
-                    boid_arr[i].y < right_screen && boid_arr[i].y >= 0)
-            tft_drawPixel(boid_arr[i].x, boid_arr[i].y, ILI9340_GREEN);             
-             
-             
+                    boid_arr[i].y < right_screen && boid_arr[i].y >= 0){
+                tft_drawPixel(boid_arr[i].x, boid_arr[i].y, ILI9340_WHITE);  
+            }
+            
+			//boid no longer has reset values
+			boid_arr[i].notReset = 1;
+            
          }
          
          //end boid loop
@@ -451,7 +519,8 @@ void main(void) {
   srand(0);
   
   //rand() % 240, rand() % 320
-
+  
+  
   // round-robin scheduler for threads
   while (1){
       PT_SCHEDULE(protothread_timer(&pt_timer));
