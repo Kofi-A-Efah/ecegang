@@ -46,7 +46,9 @@
 #define DAC_config_chan_B 0b1011000000000000
 // string buffer
 char buffer[60];
-int generate_period = (40000000/1000);
+int generate_period = (40000);
+int pwm_on_time;
+
 // === thread structures ============================================
 // thread control structs
 // note that UART input and output are threads
@@ -85,7 +87,8 @@ volatile  int DAC_data;
 volatile  int adc5;
 volatile  int adc11;
 volatile int junk;
-
+volatile int motor_disp = 0;
+volatile int scaled_pwm;
 
 typedef signed int fix16 ;
 #define multfix16(a,b) ((fix16)(((( signed long long)(a))*(( signed long long)(b)))>>16)) //multiply two fixed 16:16
@@ -107,12 +110,22 @@ void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void)
     
     adc5 = ReadADC10(0);
     AcquireADC10();
-    adc5 = adc5 + ((generate_period/2 - adc5)>>4) ;
-    WriteSPI2(DAC_config_chan_A | (adc5 & 0xfff )); 
-    //SetDCOC3PWM(generate_period/4);
+    //adc5 = adc5 + ((generate_period/2 - adc5)>>4) ;
+    WriteSPI2(DAC_config_chan_A | (adc5  + (2048/2) )); 
+    //SetDCOC3PWM(generate_period/2);
     while (SPI2STATbits.SPIBUSY); // Wait for end of transaction
-    
+    junk = ReadSPI2();
     mPORTBSetBits(BIT_4); // End Transaction
+    
+    scaled_pwm = 4096 * (pwm_on_time/generate_period);
+    motor_disp = motor_disp + ((scaled_pwm - motor_disp)>>4) ;
+    
+    
+    mPORTBClearBits(BIT_4); // Set CS Low to start new transaction
+    WriteSPI2(DAC_config_chan_B | (motor_disp));
+    while (SPI2STATbits.SPIBUSY); // Wait for end of transaction
+    junk = ReadSPI2();
+    mPORTBSetBits(BIT_4);
 }
 
 void printLine2(int line_number, char* print_buffer, short text_color, short back_color){
@@ -194,15 +207,14 @@ void main(void) {
 
   // === setup system wide interrupts  ========
   INTEnableSystemMultiVectoredInt();
-  
-    // the ADC ///////////////////////////////////////
+  pwm_on_time = generate_period/2;    // the ADC ///////////////////////////////////////
     // configure and enable the ADC
     // Sample Rate of 1kHz, so number of cycles to overflow will be 40MHz / 1kHz
     OpenTimer2(T2_ON | T2_SOURCE_INT | T2_PS_1_1,generate_period - 1  ); 
     ConfigIntTimer2(T2_INT_ON | T2_INT_PRIOR_2);
     mT2ClearIntFlag(); // clear interrupt flag
     
-    OpenOC3(OC_ON | OC_TIMER2_SRC | OC_PWM_FAULT_PIN_DISABLE, generate_period/2, 0 ); // Enable Output Compare module with pwm mode
+    OpenOC3(OC_ON | OC_TIMER2_SRC | OC_PWM_FAULT_PIN_DISABLE, pwm_on_time, 0 ); // Enable Output Compare module with pwm mode
     PPSOutput(4, RPB9, OC3);
     CloseADC10();	// ensure the ADC is off before setting the configuration
 
