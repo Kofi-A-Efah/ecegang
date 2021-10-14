@@ -83,18 +83,36 @@ volatile int spiClkDiv = 2 ; // 20 MHz DAC clock
 // actual scaled DAC 
 volatile  int DAC_data;
 volatile  int adc5;
+volatile  int adc11;
+volatile int junk;
+
+
+typedef signed int fix16 ;
+#define multfix16(a,b) ((fix16)(((( signed long long)(a))*(( signed long long)(b)))>>16)) //multiply two fixed 16:16
+#define float2fix16(a) ((fix16)((a)*65536.0)) // 2^16
+#define fix2float16(a) ((float)(a)/65536.0)
+#define fix2int16(a)    ((int)((a)>>16))
+#define int2fix16(a)    ((fix16)((a)<<16))
+#define divfix16(a,b) ((fix16)((((signed long long)(a)<<16)/(b)))) 
+#define sqrtfix16(a) (float2fix16(sqrt(fix2float16(a)))) 
+#define absfix16(a) abs(a)
+
+fix16 ADC_scale = float2fix16(3.3/1023.0); //Vref/(full scale)
+
 
 void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void)
 {
-    mT2ClearIntFlag();
+    mT2ClearIntFlag();    // clear the timer interrupt flag
     mPORTBClearBits(BIT_4); //Set CS low
     
     adc5 = ReadADC10(0);
-    
-    WriteSPI2(DAC_config_chan_A | (adc5 + 2048) );    
+    AcquireADC10();
+    adc5 = adc5 + ((generate_period/2 - adc5)>>4) ;
+    WriteSPI2(DAC_config_chan_A | (adc5 & 0xfff )); 
+    //SetDCOC3PWM(generate_period/4);
     while (SPI2STATbits.SPIBUSY); // Wait for end of transaction
-    // clear the timer interrupt flag
-    mPORTBSetBits(BIT_4);
+    
+    mPORTBSetBits(BIT_4); // End Transaction
 }
 
 void printLine2(int line_number, char* print_buffer, short text_color, short back_color){
@@ -193,30 +211,31 @@ void main(void) {
     // ADC_CLK_AUTO -- Internal counter ends sampling and starts conversion (Auto convert)
     // ADC_AUTO_SAMPLING_ON -- Sampling begins immediately after last conversion completes; SAMP bit is automatically set
     // ADC_AUTO_SAMPLING_OFF -- Sampling begins with AcquireADC10();
-    #define PARAM1  ADC_FORMAT_INTG16 | ADC_CLK_AUTO | ADC_AUTO_SAMPLING_ON //
+    #define PARAM1  ADC_FORMAT_INTG16 | ADC_CLK_AUTO | ADC_AUTO_SAMPLING_OFF //
 
 	// define setup parameters for OpenADC10
 	// ADC ref external  | disable offset test | disable scan mode | do 1 sample | use single buf | alternate mode off
-	#define PARAM2  ADC_VREF_AVDD_AVSS | ADC_OFFSET_CAL_DISABLE | ADC_SCAN_ON | ADC_SAMPLES_PER_INT_2 | ADC_ALT_BUF_OFF | ADC_ALT_INPUT_OFF
+	#define PARAM2  ADC_VREF_AVDD_AVSS | ADC_OFFSET_CAL_DISABLE | ADC_SCAN_OFF | ADC_SAMPLES_PER_INT_1 | ADC_ALT_BUF_OFF | ADC_ALT_INPUT_OFF
         //
 	// Define setup parameters for OpenADC10
     // use peripherial bus clock | set sample time | set ADC clock divider
     // ADC_CONV_CLK_Tcy2 means divide CLK_PB by 2 (max speed)
     // ADC_SAMPLE_TIME_5 seems to work with a source resistance < 1kohm
-    #define PARAM3 ADC_CONV_CLK_PB | ADC_SAMPLE_TIME_15 | ADC_CONV_CLK_Tcy 
+    #define PARAM3 ADC_CONV_CLK_PB | ADC_SAMPLE_TIME_5 | ADC_CONV_CLK_Tcy2 
 
 	// define setup parameters for OpenADC10
 	// set AN5 and as analog inputs
-	#define PARAM4	ENABLE_AN5_ANA  // 
+	#define PARAM4	ENABLE_AN5_ANA // 
 
 	// define setup parameters for OpenADC10
     // DO not skip the channels you want to scan
     // do not specify channels  5 and 11
-	#define PARAM5	SKIP_SCAN_AN0 | SKIP_SCAN_AN1 | SKIP_SCAN_AN2 | SKIP_SCAN_AN3 | SKIP_SCAN_AN4 | SKIP_SCAN_AN6 | SKIP_SCAN_AN7 | SKIP_SCAN_AN8 | SKIP_SCAN_AN9 | SKIP_SCAN_AN10 | SKIP_SCAN_AN12 | SKIP_SCAN_AN13 | SKIP_SCAN_AN14 | SKIP_SCAN_AN15
+    #define PARAM5 SKIP_SCAN_ALL
+	//#define PARAM5	SKIP_SCAN_AN0 | SKIP_SCAN_AN1 | SKIP_SCAN_AN2 | SKIP_SCAN_AN3 | SKIP_SCAN_AN4 | SKIP_SCAN_AN6 | SKIP_SCAN_AN7 | SKIP_SCAN_AN8 | SKIP_SCAN_AN9 | SKIP_SCAN_AN10 | SKIP_SCAN_AN12 | SKIP_SCAN_AN13 | SKIP_SCAN_AN14 | SKIP_SCAN_AN15
 
 	// use ground as neg ref for A 
     // actual channel number is specified by the scan list
-    SetChanADC10( ADC_CH0_NEG_SAMPLEA_NVREF); // 
+    SetChanADC10( ADC_CH0_NEG_SAMPLEA_NVREF | ADC_CH0_POS_SAMPLEA_AN5); // 
 	OpenADC10( PARAM1, PARAM2, PARAM3, PARAM4, PARAM5 ); // configure ADC using the parameters defined above
 
 	EnableADC10(); // Enable the ADC
@@ -255,7 +274,7 @@ void main(void) {
   // round-robin scheduler for threads
   while (1){
       PT_SCHEDULE(protothread_timer(&pt_timer));
-      PT_SCHEDULE(protothread_adc(&pt_adc));
+      //PT_SCHEDULE(protothread_adc(&pt_adc));
       }
   } // main
 
