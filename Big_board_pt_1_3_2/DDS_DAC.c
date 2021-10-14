@@ -117,6 +117,7 @@ int main(void)
     // 200 is 200 ksamples/sec
     
     OpenTimer2(T2_ON | T2_SOURCE_INT | T2_PS_1_1, 200);
+    
     // set up the timer interrupt with a priority of 2
     ConfigIntTimer2(T2_INT_ON | T2_INT_PRIOR_2);
     mT2ClearIntFlag(); // and clear the interrupt flag

@@ -10,7 +10,7 @@
 // You MUST check this file!
 #include "config_1_3_2.h"
 // threading library
-#include "pt_cornell_1_3_2.h"
+#include "pt_cornell_1_3_2_python.h"
 
 ////////////////////////////////////
 // graphics libraries
@@ -41,9 +41,12 @@
   MIT license, all text above must be included in any redistribution
  ****************************************************/
 
+
+#define DAC_config_chan_A 0b0011000000000000
+#define DAC_config_chan_B 0b1011000000000000
 // string buffer
 char buffer[60];
-
+int generate_period = (40000000/1000);
 // === thread structures ============================================
 // thread control structs
 // note that UART input and output are threads
@@ -70,6 +73,28 @@ void printLine(int line_number, char* print_buffer, short text_color, short back
     tft_setCursor(0, v_pos);
     tft_setTextSize(1);
     tft_writeString(print_buffer);
+}
+
+//DAC stuff
+volatile SpiChannel spiChn = SPI_CHANNEL2 ;	// the SPI channel to use
+// for 60 MHz PB clock use divide-by-3
+volatile int spiClkDiv = 2 ; // 20 MHz DAC clock
+//== Timer 2 interrupt handler ===========================================
+// actual scaled DAC 
+volatile  int DAC_data;
+volatile  int adc5;
+
+void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void)
+{
+    mT2ClearIntFlag();
+    mPORTBClearBits(BIT_4); //Set CS low
+    
+    adc5 = ReadADC10(0);
+    
+    WriteSPI2(DAC_config_chan_A | (adc5 + 2048) );    
+    while (SPI2STATbits.SPIBUSY); // Wait for end of transaction
+    // clear the timer interrupt flag
+    mPORTBSetBits(BIT_4);
 }
 
 void printLine2(int line_number, char* print_buffer, short text_color, short back_color){
@@ -107,6 +132,7 @@ static PT_THREAD (protothread_timer(struct pt *pt))
 // === ADC Thread =============================================
 // 
 
+
 static PT_THREAD (protothread_adc(struct pt *pt))
 {
     PT_BEGIN(pt);
@@ -123,6 +149,7 @@ static PT_THREAD (protothread_adc(struct pt *pt))
         adc_11 = ReadADC10(1);   // 
         
         // print raw ADC, floating voltage, fixed voltage
+        
         sprintf(buffer, "AN11=%04d AN5=%04d ", adc_11, adc_5);
         printLine2(5, buffer, ILI9340_YELLOW, ILI9340_BLACK);
         
@@ -152,7 +179,14 @@ void main(void) {
   
     // the ADC ///////////////////////////////////////
     // configure and enable the ADC
-	CloseADC10();	// ensure the ADC is off before setting the configuration
+    // Sample Rate of 1kHz, so number of cycles to overflow will be 40MHz / 1kHz
+    OpenTimer2(T2_ON | T2_SOURCE_INT | T2_PS_1_1,generate_period - 1  ); 
+    ConfigIntTimer2(T2_INT_ON | T2_INT_PRIOR_2);
+    mT2ClearIntFlag(); // clear interrupt flag
+    
+    OpenOC3(OC_ON | OC_TIMER2_SRC | OC_PWM_FAULT_PIN_DISABLE, generate_period/2, 0 ); // Enable Output Compare module with pwm mode
+    PPSOutput(4, RPB9, OC3);
+    CloseADC10();	// ensure the ADC is off before setting the configuration
 
 	// define setup parameters for OpenADC10
 	// Turn module on | ouput in integer | trigger mode auto | enable autosample
@@ -172,8 +206,8 @@ void main(void) {
     #define PARAM3 ADC_CONV_CLK_PB | ADC_SAMPLE_TIME_15 | ADC_CONV_CLK_Tcy 
 
 	// define setup parameters for OpenADC10
-	// set AN11 and  as analog inputs
-	#define PARAM4	ENABLE_AN11_ANA | ENABLE_AN5_ANA // 
+	// set AN5 and as analog inputs
+	#define PARAM4	ENABLE_AN5_ANA  // 
 
 	// define setup parameters for OpenADC10
     // DO not skip the channels you want to scan
@@ -187,6 +221,22 @@ void main(void) {
 
 	EnableADC10(); // Enable the ADC
   ///////////////////////////////////////////////////////
+    
+    //DAC stuff
+    
+    /// SPI setup //////////////////////////////////////////
+    // SCK2 is pin 26 
+    // SDO2 is in PPS output group 2, could be connected to RB5 which is pin 14
+    PPSOutput(2, RPB5, SDO2);
+    // control CS for DAC
+    mPORTBSetPinsDigitalOut(BIT_4);
+    mPORTBSetBits(BIT_4);
+    // divide Fpb by 2, configure the I/O ports. Not using SS in this example
+    // 16 bit transfer CKP=1 CKE=1
+    // possibles SPI_OPEN_CKP_HIGH;   SPI_OPEN_SMP_END;  SPI_OPEN_CKE_REV
+    // For any given peripherial, you will need to match these
+    SpiChnOpen(spiChn, SPI_OPEN_ON | SPI_OPEN_MODE16 | SPI_OPEN_MSTEN | SPI_OPEN_CKE_REV , spiClkDiv);
+    
     
   // init the threads
   PT_INIT(&pt_timer);
