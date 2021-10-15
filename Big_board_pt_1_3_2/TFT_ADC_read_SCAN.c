@@ -87,7 +87,7 @@ volatile  int DAC_data;
 volatile  int adc5;
 volatile  int adc11;
 volatile int junk;
-volatile int motor_disp = 0;
+volatile int motor_disp;
 volatile int scaled_pwm;
 
 typedef signed int fix16 ;
@@ -115,17 +115,20 @@ void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void)
     //SetDCOC3PWM(generate_period/2);
     while (SPI2STATbits.SPIBUSY); // Wait for end of transaction
     junk = ReadSPI2();
+    // dac chan a
+    
     mPORTBSetBits(BIT_4); // End Transaction
     
-    scaled_pwm = 4096 * (pwm_on_time/generate_period);
+    scaled_pwm = (int) (4096 * ((float)pwm_on_time/(float)generate_period));
     motor_disp = motor_disp + ((scaled_pwm - motor_disp)>>4) ;
-    
+//    SetDCOC3PWM(pwm_on_time);
     
     mPORTBClearBits(BIT_4); // Set CS Low to start new transaction
     WriteSPI2(DAC_config_chan_B | (motor_disp));
     while (SPI2STATbits.SPIBUSY); // Wait for end of transaction
     junk = ReadSPI2();
-    mPORTBSetBits(BIT_4);
+    mPORTBSetBits(BIT_4); // End transaction
+    
 }
 
 void printLine2(int line_number, char* print_buffer, short text_color, short back_color){
@@ -167,28 +170,24 @@ static PT_THREAD (protothread_timer(struct pt *pt))
 static PT_THREAD (protothread_adc(struct pt *pt))
 {
     PT_BEGIN(pt);
-    static int adc_11, adc_5;
             
     while(1) {
         // yield time 1 second
         PT_YIELD_TIME_msec(100);
-        
-        //read selected ANx pins in order, AN5 first
-        adc_5 = ReadADC10(0);   // 
-        
-        // then AN11
-        adc_11 = ReadADC10(1);   // 
+         
         
         // print raw ADC, floating voltage, fixed voltage
         
-        sprintf(buffer, "AN11=%04d AN5=%04d ", adc_11, adc_5);
-        printLine2(5, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+        sprintf(buffer, "Motordisp=%04d\n", motor_disp);
         
+        printLine2(5, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+        sprintf(buffer, "scaled_pwm=%d\n", scaled_pwm);
+        printLine2(5, buffer, ILI9340_YELLOW, ILI9340_BLACK);
         green_text ;
         cursor_pos(3,1);
-        sprintf(PT_send_buffer,"AN11=%04d AN5=%04d ", adc_11, adc_5);
+//        sprintf(PT_send_buffer,"AN11=%04d AN5=%04d ", adc_11, adc_5);
         PT_SPAWN(pt, &pt_DMA_output, PT_DMA_PutSerialBuffer(&pt_DMA_output) );
-        clr_right ;
+//        clr_right ;
         
         // NEVER exit while
       } // END WHILE(1)
@@ -204,7 +203,7 @@ void main(void) {
   // === config threads ==========
   // turns OFF UART support and debugger pin, unless defines are set
   PT_setup();
-
+  motor_disp = 0;
   // === setup system wide interrupts  ========
   INTEnableSystemMultiVectoredInt();
   pwm_on_time = generate_period/2;    // the ADC ///////////////////////////////////////
@@ -286,7 +285,7 @@ void main(void) {
   // round-robin scheduler for threads
   while (1){
       PT_SCHEDULE(protothread_timer(&pt_timer));
-      //PT_SCHEDULE(protothread_adc(&pt_adc));
+      PT_SCHEDULE(protothread_adc(&pt_adc));
       }
   } // main
 
