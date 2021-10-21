@@ -18,6 +18,7 @@
 #include "tft_gfx.h"
 // need for rand function
 #include <stdlib.h>
+#include <math.h>
 ////////////////////////////////////
 
 
@@ -48,11 +49,24 @@
 char buffer[60];
 int generate_period = (40000);
 int pwm_on_time;
+int kp = 500; 
+int int_const; 
+int der_const; 
+int max_adc_value = 365; //180
+int min_adc_value = 905; //0
+float step_adc; 
+int desired_degree = 60;
+
+//.85 V for 90 -> 0.11 -> 40%  
+//0.96 - 0.69 = 0.27
+// PID 
+// 285 for top 
+// 895 for bottom
 
 // === thread structures ============================================
 // thread control structs
 // note that UART input and output are threads
-static struct pt pt_timer, pt_adc ;
+static struct pt pt_timer, pt_adc, pt_serial, pt_button ;
 // The following threads are necessary for UART control
 static struct pt pt_input, pt_output, pt_DMA_output ;
 
@@ -89,6 +103,9 @@ volatile  int adc11;
 volatile int junk;
 volatile int motor_disp;
 volatile int scaled_pwm;
+volatile float degree5;
+volatile float err_degree; 
+volatile float prop;
 
 typedef signed int fix16 ;
 #define multfix16(a,b) ((fix16)(((( signed long long)(a))*(( signed long long)(b)))>>16)) //multiply two fixed 16:16
@@ -101,7 +118,7 @@ typedef signed int fix16 ;
 #define absfix16(a) abs(a)
 
 fix16 ADC_scale = float2fix16(3.3/1023.0); //Vref/(full scale)
-
+float adcToDegree(int adc);
 
 void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void)
 {
@@ -112,6 +129,11 @@ void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void)
     AcquireADC10();
     //adc5 = adc5 + ((generate_period/2 - adc5)>>4) ;
     WriteSPI2(DAC_config_chan_A | (adc5  + (2048/2) )); 
+    degree5 = adcToDegree(adc5); 
+    err_degree = desired_degree - degree5;
+    //prop = kp * err_degree;
+    
+    
     //SetDCOC3PWM(generate_period/2);
     while (SPI2STATbits.SPIBUSY); // Wait for end of transaction
     junk = ReadSPI2();
@@ -119,9 +141,16 @@ void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void)
     
     mPORTBSetBits(BIT_4); // End Transaction
     
+    pwm_on_time = kp * err_degree;
+    if(pwm_on_time <= 0) pwm_on_time = 0;
+    else if (pwm_on_time >= generate_period) pwm_on_time = generate_period;
+    
     scaled_pwm = (int) (4096 * ((float)pwm_on_time/(float)generate_period));
     motor_disp = motor_disp + ((scaled_pwm - motor_disp)>>4) ;
-//    SetDCOC3PWM(pwm_on_time);
+    SetDCOC3PWM(pwm_on_time);
+    //pwm_on_time = prop_const * (desired_pwn - scaled_pwm);
+    
+//    
     
     mPORTBClearBits(BIT_4); // Set CS Low to start new transaction
     WriteSPI2(DAC_config_chan_B | (motor_disp));
@@ -162,10 +191,129 @@ static PT_THREAD (protothread_timer(struct pt *pt))
       } // END WHILE(1)
   PT_END(pt);
 } // timer thread
-
+char new_string = 0;
+char receive_string[64];
 // === ADC Thread =============================================
 // 
+static PT_THREAD (protothread_python_string(struct pt *pt))
+{
+    PT_BEGIN(pt);
+    static int dds_freq;
+    // 
+    while(1){
+        // wait for a new string from Python
+        PT_YIELD_UNTIL(pt, new_string==1);
+        new_string = 0;
+        // parse frequency command
+        if (receive_string[0] == '0'){
+            // dds frequency
+            int temp_kp;
+            int corr_int = 1;
+            int i;
+            for ( i=0; i < strlen(receive_string); i++) {               
+                if (receive_string[i] >= '0' && receive_string[i] <= '9'){
+                    temp_kp = pow(10, (strlen(receive_string) - i - 1)) * ((int)receive_string[i] - 48);
+                }
+                else {
+                    corr_int = 0;
+                }
+            }
+            if (corr_int == 1){
+                kp = temp_kp;
+            }
+        }
+        //
+        else {
+            printf("Bug in the receive_string[0]");
+        }
+    } // END WHILE(1)   
+    PT_END(pt);  
+} // thread python_string
 
+static PT_THREAD (protothread_serial(struct pt *pt))
+{
+    PT_BEGIN(pt);
+    static char junk;
+    //   
+    //
+    while(1){
+        // There is no YIELD in this loop because there are
+        // YIELDS in the spawned threads that determine the 
+        // execution rate while WAITING for machine input
+        // =============================================
+        // NOTE!! -- to use serial spawned functions
+        // you MUST edit config_1_3_2 to
+        // (1) uncomment the line -- #define use_uart_serial
+        // (2) SET the baud rate to match the PC terminal
+        // =============================================
+        
+        // now wait for machine input from python
+        // Terminate on the usual <enter key>
+        PT_terminate_char = '\r' ; 
+        PT_terminate_count = 0 ; 
+        PT_terminate_time = 0 ;
+        // note that there will NO visual feedback using the following function
+        PT_SPAWN(pt, &pt_input, PT_GetMachineBuffer(&pt_input) );
+        
+        // Parse the string from Python
+        // There can be toggle switch, button, slider, and string events
+        
+        // toggle switch
+//        if (PT_term_buffer[0]=='t'){
+//            // signal the button thread
+//            new_toggle = 1;
+//            // subtracting '0' converts ascii to binary for 1 character
+//            toggle_id = (PT_term_buffer[1] - '0')*10 + (PT_term_buffer[2] - '0');
+//            toggle_value = PT_term_buffer[3] - '0';
+//        }
+        
+        // pushbutton
+//        if (PT_term_buffer[0]=='b'){
+//            // signal the button thread
+//            new_button = 1;
+//            // subtracting '0' converts ascii to binary for 1 character
+//            button_id = (PT_term_buffer[1] - '0')*10 + (PT_term_buffer[2] - '0');
+//            button_value = PT_term_buffer[3] - '0';
+//        }
+        
+        // slider
+//        if (PT_term_buffer[0]=='s'){
+//            sscanf(PT_term_buffer, "%c %d %f", &junk, &slider_id, &slider_value);
+//            new_slider = 1;
+//        }
+        
+        // listbox
+//        if (PT_term_buffer[0]=='l'){
+//            new_list = 1;
+//            list_id = PT_term_buffer[2] - '0' ;
+//            list_value = PT_term_buffer[3] - '0';
+//            //printf("%d %d", list_id, list_value);
+//        }
+        
+        // radio group
+//        if (PT_term_buffer[0]=='r'){
+//            new_radio = 1;
+//            radio_group_id = PT_term_buffer[2] - '0' ;
+//            radio_member_id = PT_term_buffer[3] - '0';
+//            //printf("%d %d", radio_group_id, radio_member_id);
+//        }
+        
+       // string from python input line
+        if (PT_term_buffer[0]=='$'){
+            // signal parsing thread
+            new_string = 1;
+            // output to thread which parses the string
+            // while striping off the '$'
+            strcpy(receive_string, PT_term_buffer+1);
+        }            
+
+        
+        
+        
+        
+    } // END WHILE(1)   
+    PT_END(pt);  
+} 
 
 static PT_THREAD (protothread_adc(struct pt *pt))
 {
@@ -177,11 +325,12 @@ static PT_THREAD (protothread_adc(struct pt *pt))
          
         
         // print raw ADC, floating voltage, fixed voltage
+       
         
         sprintf(buffer, "Motordisp=%04d\n", motor_disp);
         
         printLine2(5, buffer, ILI9340_YELLOW, ILI9340_BLACK);
-        sprintf(buffer, "scaled_pwm=%d\n", scaled_pwm);
+        sprintf(buffer, "scaled_pwm=%2f\n", degree5);
         printLine2(5, buffer, ILI9340_YELLOW, ILI9340_BLACK);
         green_text ;
         cursor_pos(3,1);
@@ -193,6 +342,20 @@ static PT_THREAD (protothread_adc(struct pt *pt))
       } // END WHILE(1)
   PT_END(pt);
 } // animation thread
+
+float adcToDegree(int adc) {
+    float temp = (float)(adc - min_adc_value); 
+    if (temp >= 0) {
+        temp = 0; 
+    }
+    else {
+        temp = (temp/step_adc) * 180; //575
+        if (temp >= 180){
+            temp = 180;
+        }
+    }  
+    return temp;  
+}
 
 // === Main  ======================================================
 void main(void) {
@@ -206,7 +369,7 @@ void main(void) {
   motor_disp = 0;
   // === setup system wide interrupts  ========
   INTEnableSystemMultiVectoredInt();
-  pwm_on_time = generate_period/2;    // the ADC ///////////////////////////////////////
+  pwm_on_time = 0; //generate_period/2;    // the ADC ///////////////////////////////////////
     // configure and enable the ADC
     // Sample Rate of 1kHz, so number of cycles to overflow will be 40MHz / 1kHz
     OpenTimer2(T2_ON | T2_SOURCE_INT | T2_PS_1_1,generate_period - 1  ); 
@@ -271,7 +434,8 @@ void main(void) {
   // init the threads
   PT_INIT(&pt_timer);
   PT_INIT(&pt_adc);
-
+  PT_INIT(&pt_serial);
+  PT_INIT(&pt_button);
   // init the display
   tft_init_hw();
   tft_begin();
@@ -281,11 +445,16 @@ void main(void) {
 
   // seed random color
   srand(1);
+  step_adc = (max_adc_value - min_adc_value);
 
   // round-robin scheduler for threads
   while (1){
       PT_SCHEDULE(protothread_timer(&pt_timer));
       PT_SCHEDULE(protothread_adc(&pt_adc));
+      PT_SCHEDULE(protothread_adc(&pt_serial));
+      PT_SCHEDULE(protothread_adc(&pt_button));
+
+      
       }
   } // main
 

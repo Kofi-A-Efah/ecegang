@@ -103,7 +103,8 @@ layout = [  [sg.Text('PID Control',  background_color=heading_color)],
             #
             [sg.Text('Beam Angle (Degrees)'),
             sg.InputText('', size=(22,15), key='textbox_1',do_not_clear=False,
-             enable_events=False, focus=True)
+             enable_events=False, focus=True),
+             sg.Button('Send', key='pushbut04', font='Helvetica 12')
              ],
             #
             [sg.Text('Proportional Gain'),
@@ -244,6 +245,48 @@ while True:
        window['pic_input'].update('')
        # send to PIC protothreads
        ser.write((input_state).encode())
+
+    elif event == 'pushbut01':
+       # The text from the one-line input field
+       input_state = window.Element('pic_input').get()
+       # add <cr> for PIC
+       input_state = '$0' + input_state + '\r'
+       # zero the input field
+       window['pic_input'].update('')
+       # send to PIC protothreads
+       ser.write((input_state).encode())
+
+    elif event == 'pushbut02':
+       # The text from the one-line input field
+       input_state = window.Element('pic_input').get()
+       # add <cr> for PIC
+       input_state = '$1' + input_state + '\r'
+       # zero the input field
+       window['pic_input'].update('')
+       # send to PIC protothreads
+       ser.write((input_state).encode())
+
+    elif event == 'pushbut03':
+       # The text from the one-line input field
+       input_state = window.Element('pic_input').get()
+       # add <cr> for PIC
+       input_state = '$2' + input_state + '\r'
+       # zero the input field
+       window['pic_input'].update('')
+       # send to PIC protothreads
+       ser.write((input_state).encode())
+
+    elif event == 'pushbut04':
+       # The text from the one-line input field
+       input_state = window.Element('pic_input').get()
+       # add <cr> for PIC
+       input_state = '$3' + input_state + '\r'
+       # zero the input field
+       window['pic_input'].update('')
+       # send to PIC protothreads
+       ser.write((input_state).encode())
+
+
     #
     #  serial data to be displayed to the user
     if event == 'PIC_recv' :
