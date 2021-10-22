@@ -49,7 +49,7 @@
 char buffer[60];
 int generate_period = (40000);
 int pwm_on_time;
-int kp = 500; 
+int kp = 200; 
 int int_const; 
 int der_const; 
 int max_adc_value = 365; //180
@@ -66,7 +66,7 @@ int desired_degree = 60;
 // === thread structures ============================================
 // thread control structs
 // note that UART input and output are threads
-static struct pt pt_timer, pt_adc, pt_serial, pt_button ;
+static struct pt pt_timer, pt_adc, pt_serial, pt_slider ;
 // The following threads are necessary for UART control
 static struct pt pt_input, pt_output, pt_DMA_output ;
 
@@ -191,40 +191,22 @@ static PT_THREAD (protothread_timer(struct pt *pt))
       } // END WHILE(1)
   PT_END(pt);
 } // timer thread
-char new_string = 0;
-char receive_string[64];
+int new_slider = 0;
+float slider_value; 
+int slider_id; 
 // === ADC Thread =============================================
 // 
-static PT_THREAD (protothread_python_string(struct pt *pt))
+static PT_THREAD (protothread_slider(struct pt *pt))
 {
     PT_BEGIN(pt);
-    static int dds_freq;
     // 
     while(1){
-        // wait for a new string from Python
-        PT_YIELD_UNTIL(pt, new_string==1);
-        new_string = 0;
+        // wait for a new slider value from Python
+        PT_YIELD_UNTIL(pt, new_slider==1);
+        new_slider = 0; //clear flag
         // parse frequency command
-        if (receive_string[0] == '0'){
-            // dds frequency
-            int temp_kp;
-            int corr_int = 1;
-            int i;
-            for ( i=0; i < strlen(receive_string); i++) {               
-                if (receive_string[i] >= '0' && receive_string[i] <= '9'){
-                    temp_kp = pow(10, (strlen(receive_string) - i - 1)) * ((int)receive_string[i] - 48);
-                }
-                else {
-                    corr_int = 0;
-                }
-            }
-            if (corr_int == 1){
-                kp = temp_kp;
-            }
-        }
-        //
-        else {
-            printf("Bug in the receive_string[0]");
+        if (slider_id == 2) {
+            kp = (int)slider_value;
         }
     } // END WHILE(1)   
     PT_END(pt);  
@@ -277,10 +259,10 @@ static PT_THREAD (protothread_serial(struct pt *pt))
 //        }
         
         // slider
-//        if (PT_term_buffer[0]=='s'){
-//            sscanf(PT_term_buffer, "%c %d %f", &junk, &slider_id, &slider_value);
-//            new_slider = 1;
-//        }
+        if (PT_term_buffer[0]=='s'){
+           sscanf(PT_term_buffer, "%c %d %f", &junk, &slider_id, &slider_value);
+           new_slider = 1;
+        }
         
         // listbox
 //        if (PT_term_buffer[0]=='l'){
@@ -299,13 +281,13 @@ static PT_THREAD (protothread_serial(struct pt *pt))
 //        }
         
        // string from python input line
-        if (PT_term_buffer[0]=='$'){
+//        if (PT_term_buffer[0]=='$'){
             // signal parsing thread
-            new_string = 1;
+//            new_string = 1;
             // output to thread which parses the string
             // while striping off the '$'
-            strcpy(receive_string, PT_term_buffer+1);
-        }            
+ //           strcpy(receive_string, PT_term_buffer+1);
+ //       }            
 
         
         
@@ -330,7 +312,7 @@ static PT_THREAD (protothread_adc(struct pt *pt))
         sprintf(buffer, "Motordisp=%04d\n", motor_disp);
         
         printLine2(5, buffer, ILI9340_YELLOW, ILI9340_BLACK);
-        sprintf(buffer, "scaled_pwm=%2f\n", degree5);
+        sprintf(buffer, "kp=%04d\n", kp);
         printLine2(5, buffer, ILI9340_YELLOW, ILI9340_BLACK);
         green_text ;
         cursor_pos(3,1);
@@ -435,7 +417,7 @@ void main(void) {
   PT_INIT(&pt_timer);
   PT_INIT(&pt_adc);
   PT_INIT(&pt_serial);
-  PT_INIT(&pt_button);
+  PT_INIT(&pt_slider);
   // init the display
   tft_init_hw();
   tft_begin();
@@ -451,8 +433,8 @@ void main(void) {
   while (1){
       PT_SCHEDULE(protothread_timer(&pt_timer));
       PT_SCHEDULE(protothread_adc(&pt_adc));
-      PT_SCHEDULE(protothread_adc(&pt_serial));
-      PT_SCHEDULE(protothread_adc(&pt_button));
+      PT_SCHEDULE(protothread_serial(&pt_serial));
+      PT_SCHEDULE(protothread_slider(&pt_slider));
 
       
       }

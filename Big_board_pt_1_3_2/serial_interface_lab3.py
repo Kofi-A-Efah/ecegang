@@ -71,7 +71,7 @@ def PIC_serial_recv(ser_str, window):
 # ############################ Begin GUI code #############################
 # open microcontroller serial port
 # For windows the device will be 'COMx'
-ser = serial.Serial('COM4', 38400, timeout=0.001)  # open serial port 38400
+ser = serial.Serial('COM5', 38400, timeout=0.001)  # open serial port 38400
 
 #sg.theme('DarkAmber')   # Add a touch of color
 # All the stuff inside your window.
@@ -102,33 +102,25 @@ heading_color = '#2FB8AD'
 layout = [  [sg.Text('PID Control',  background_color=heading_color)],
             #
             [sg.Text('Beam Angle (Degrees)'),
-            sg.InputText('', size=(22,15), key='textbox_1',do_not_clear=False,
-             enable_events=False, focus=True),
-             sg.Button('Send', key='pushbut04', font='Helvetica 12')
-             ],
+            sg.Slider(range=(0,180), default_value=90, key='slider1',
+               orientation='horizontal', font=('Helvetica',12),enable_events=True)       
+            ],
             #
             [sg.Text('Proportional Gain'),
-            sg.InputText('', size=(22,15), key='textbox_2',do_not_clear=False,
-             enable_events=False, focus=True),
-             sg.Button('Send', key='pushbut01', font='Helvetica 12')
+            sg.Slider(range=(1,1000), default_value=500, key='slider2',orientation='horizontal',
+             font=('Helvetica',12),enable_events=True)
              ],
             #
             [sg.Text('Differential Gain'),
-            sg.InputText('', size=(22,15), key='textbox_3',do_not_clear=False,
-             enable_events=False, focus=True),
-             sg.Button('Send', key='pushbut02', font='Helvetica 12')
+            sg.Slider(range=(1,1000), default_value=500, key='slider3',orientation='horizontal',
+             font=('Helvetica',12),enable_events=True)
              ],
             #
             [sg.Text('Integral Gain'),
-            sg.InputText('', size=(22,15), key='textbox_4',do_not_clear=False,
-             enable_events=False, focus=True),
-             sg.Button('Send', key='pushbut03', font='Helvetica 12')
+            sg.Slider(range=(1,1000), default_value=500, key='slider4',orientation='horizontal',
+             font=('Helvetica',12),enable_events=True)
              ],
-            #
-            [sg.Text('Serial data to PIC', background_color=heading_color)],
-            [sg.InputText('', size=(40,10), key='pic_input', do_not_clear=False,
-                enable_events=False, focus=True),
-             sg.Button('Send', key='pic_send', font='Helvetica 12')],
+            
             #
             [sg.Text('Serial data from PIC', background_color=heading_color)],
             [sg.Multiline('', size=(50,10), key='console',
@@ -161,9 +153,9 @@ window = sg.Window('ECE4760 Interface', layout, location=(0,0),
 
 # Bind the realtime button release events <ButtonRelease-1>
 # https://github.com/PySimpleGUI/PySimpleGUI/issues/2020
-window['pushbut01'].bind('<ButtonRelease-1>', 'r')
-window['pushbut02'].bind('<ButtonRelease-1>', 'r')
-window['pushbut03'].bind('<ButtonRelease-1>', 'r')
+#window['pushbut01'].bind('<ButtonRelease-1>', 'r')
+#window['pushbut02'].bind('<ButtonRelease-1>', 'r')
+#window['pushbut03'].bind('<ButtonRelease-1>', 'r')
 
 # Event Loop to process "events" 
 # event is set by window.read
@@ -251,36 +243,6 @@ while True:
        input_state = window.Element('pic_input').get()
        # add <cr> for PIC
        input_state = '$0' + input_state + '\r'
-       # zero the input field
-       window['pic_input'].update('')
-       # send to PIC protothreads
-       ser.write((input_state).encode())
-
-    elif event == 'pushbut02':
-       # The text from the one-line input field
-       input_state = window.Element('pic_input').get()
-       # add <cr> for PIC
-       input_state = '$1' + input_state + '\r'
-       # zero the input field
-       window['pic_input'].update('')
-       # send to PIC protothreads
-       ser.write((input_state).encode())
-
-    elif event == 'pushbut03':
-       # The text from the one-line input field
-       input_state = window.Element('pic_input').get()
-       # add <cr> for PIC
-       input_state = '$2' + input_state + '\r'
-       # zero the input field
-       window['pic_input'].update('')
-       # send to PIC protothreads
-       ser.write((input_state).encode())
-
-    elif event == 'pushbut04':
-       # The text from the one-line input field
-       input_state = window.Element('pic_input').get()
-       # add <cr> for PIC
-       input_state = '$3' + input_state + '\r'
        # zero the input field
        window['pic_input'].update('')
        # send to PIC protothreads
