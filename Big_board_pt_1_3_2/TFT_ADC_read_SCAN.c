@@ -49,13 +49,15 @@
 char buffer[60];
 int generate_period = (40000);
 int pwm_on_time;
-int kp = 200; 
+int kp = 500; 
+float ki = 0.03125; 
+int kd = 1000;
 int int_const; 
 int der_const; 
 int max_adc_value = 365; //180
 int min_adc_value = 905; //0
 float step_adc; 
-int desired_degree = 60;
+int desired_degree = 90;
 
 //.85 V for 90 -> 0.11 -> 40%  
 //0.96 - 0.69 = 0.27
@@ -105,7 +107,9 @@ volatile int motor_disp;
 volatile int scaled_pwm;
 volatile float degree5;
 volatile float err_degree; 
-volatile float prop;
+//volatile float prop;
+volatile int time = 0.001;
+volatile float rate_err;
 
 typedef signed int fix16 ;
 #define multfix16(a,b) ((fix16)(((( signed long long)(a))*(( signed long long)(b)))>>16)) //multiply two fixed 16:16
@@ -119,6 +123,8 @@ typedef signed int fix16 ;
 
 fix16 ADC_scale = float2fix16(3.3/1023.0); //Vref/(full scale)
 float adcToDegree(int adc);
+volatile float prev_err_degree;
+volatile float sum_err;
 
 void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void)
 {
@@ -131,6 +137,8 @@ void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void)
     WriteSPI2(DAC_config_chan_A | (adc5  + (2048/2) )); 
     degree5 = adcToDegree(adc5); 
     err_degree = desired_degree - degree5;
+    rate_err = (err_degree - prev_err_degree)/time; 
+    sum_err = sum_err + (err_degree * time); 
     //prop = kp * err_degree;
     
     
@@ -141,12 +149,13 @@ void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void)
     
     mPORTBSetBits(BIT_4); // End Transaction
     
-    pwm_on_time = kp * err_degree;
+    pwm_on_time = (kp * err_degree) + (kd * rate_err) + (ki * sum_err);
     if(pwm_on_time <= 0) pwm_on_time = 0;
     else if (pwm_on_time >= generate_period) pwm_on_time = generate_period;
     
     scaled_pwm = (int) (4096 * ((float)pwm_on_time/(float)generate_period));
     motor_disp = motor_disp + ((scaled_pwm - motor_disp)>>4) ;
+    //prev_err_degree = err_degree;
     SetDCOC3PWM(pwm_on_time);
     //pwm_on_time = prop_const * (desired_pwn - scaled_pwm);
     
@@ -187,6 +196,20 @@ static PT_THREAD (protothread_timer(struct pt *pt))
         // draw sys_time
         sprintf(buffer,"%d", sys_time_seconds);
         printLine2(1, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+                  
+        sprintf(buffer, "desired_degree=%d\n", desired_degree);       
+        printLine2(2, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+        
+        sprintf(buffer, "kp=%d\n", kp);
+        printLine2(3, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+        
+        sprintf(buffer, "kd=%d\n", kd);
+        printLine2(4, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+        
+        sprintf(buffer, "ki=%f\n", ki);
+        printLine2(5, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+        green_text ;
+        cursor_pos(3,1);
         // NEVER exit while
       } // END WHILE(1)
   PT_END(pt);
@@ -205,8 +228,17 @@ static PT_THREAD (protothread_slider(struct pt *pt))
         PT_YIELD_UNTIL(pt, new_slider==1);
         new_slider = 0; //clear flag
         // parse frequency command
+        if (slider_id == 1) {
+            desired_degree = (int)slider_value;
+        }
         if (slider_id == 2) {
             kp = (int)slider_value;
+        }
+        if (slider_id == 3){
+            kd = (int)slider_value;
+        }
+        if (slider_id == 4){
+            ki = (float)slider_value;
         }
     } // END WHILE(1)   
     PT_END(pt);  
@@ -306,16 +338,6 @@ static PT_THREAD (protothread_adc(struct pt *pt))
         PT_YIELD_TIME_msec(100);
          
         
-        // print raw ADC, floating voltage, fixed voltage
-       
-        
-        sprintf(buffer, "Motordisp=%04d\n", motor_disp);
-        
-        printLine2(5, buffer, ILI9340_YELLOW, ILI9340_BLACK);
-        sprintf(buffer, "kp=%04d\n", kp);
-        printLine2(5, buffer, ILI9340_YELLOW, ILI9340_BLACK);
-        green_text ;
-        cursor_pos(3,1);
 //        sprintf(PT_send_buffer,"AN11=%04d AN5=%04d ", adc_11, adc_5);
         PT_SPAWN(pt, &pt_DMA_output, PT_DMA_PutSerialBuffer(&pt_DMA_output) );
 //        clr_right ;
@@ -351,7 +373,9 @@ void main(void) {
   motor_disp = 0;
   // === setup system wide interrupts  ========
   INTEnableSystemMultiVectoredInt();
-  pwm_on_time = 0; //generate_period/2;    // the ADC ///////////////////////////////////////
+  pwm_on_time = 0; //generate_period/2; 
+  prev_err_degree = 0; 
+  // the ADC ///////////////////////////////////////
     // configure and enable the ADC
     // Sample Rate of 1kHz, so number of cycles to overflow will be 40MHz / 1kHz
     OpenTimer2(T2_ON | T2_SOURCE_INT | T2_PS_1_1,generate_period - 1  ); 

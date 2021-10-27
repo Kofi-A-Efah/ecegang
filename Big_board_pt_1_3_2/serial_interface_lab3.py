@@ -71,7 +71,7 @@ def PIC_serial_recv(ser_str, window):
 # ############################ Begin GUI code #############################
 # open microcontroller serial port
 # For windows the device will be 'COMx'
-ser = serial.Serial('COM5', 38400, timeout=0.001)  # open serial port 38400
+ser = serial.Serial('COM4', 38400, timeout=0.001)  # open serial port 38400
 
 #sg.theme('DarkAmber')   # Add a touch of color
 # All the stuff inside your window.
@@ -112,15 +112,16 @@ layout = [  [sg.Text('PID Control',  background_color=heading_color)],
              ],
             #
             [sg.Text('Differential Gain'),
-            sg.Slider(range=(1,1000), default_value=500, key='slider3',orientation='horizontal',
+            sg.Slider(range=(1,10000), default_value=1000, key='slider3',orientation='horizontal', resolution=500,
              font=('Helvetica',12),enable_events=True)
              ],
             #
             [sg.Text('Integral Gain'),
-            sg.Slider(range=(1,1000), default_value=500, key='slider4',orientation='horizontal',
+            sg.Slider(range=(0,1), default_value=0.03125, key='slider4',orientation='horizontal', resolution=0.01,
              font=('Helvetica',12),enable_events=True)
-             ],
-            
+             ], 
+            #
+            [sg.RealtimeButton('Angle Control Test', key = 'pushbut01', font='Helvetica 12')],
             #
             [sg.Text('Serial data from PIC', background_color=heading_color)],
             [sg.Multiline('', size=(50,10), key='console',
@@ -153,7 +154,7 @@ window = sg.Window('ECE4760 Interface', layout, location=(0,0),
 
 # Bind the realtime button release events <ButtonRelease-1>
 # https://github.com/PySimpleGUI/PySimpleGUI/issues/2020
-#window['pushbut01'].bind('<ButtonRelease-1>', 'r')
+window['pushbut01'].bind('<ButtonRelease-1>', 'r')
 #window['pushbut02'].bind('<ButtonRelease-1>', 'r')
 #window['pushbut03'].bind('<ButtonRelease-1>', 'r')
 
