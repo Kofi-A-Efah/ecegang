@@ -48,15 +48,16 @@
 // string buffer
 char buffer[60];
 int generate_period = (40000);
-int pwm_on_time;
-int kp = 200; 
+float pwm_on_time;
+int kp = 300; 
+float ki = 0.36; 
+int kd = 10000;
 int int_const; 
 int der_const; 
 int max_adc_value = 365; //180
 int min_adc_value = 905; //0
 float step_adc; 
-int desired_degree = 60;
-
+int desired_degree = 90;
 //.85 V for 90 -> 0.11 -> 40%  
 //0.96 - 0.69 = 0.27
 // PID 
@@ -66,7 +67,7 @@ int desired_degree = 60;
 // === thread structures ============================================
 // thread control structs
 // note that UART input and output are threads
-static struct pt pt_timer, pt_adc, pt_serial, pt_slider ;
+static struct pt pt_timer, pt_adc, pt_serial, pt_slider, pt_button;
 // The following threads are necessary for UART control
 static struct pt pt_input, pt_output, pt_DMA_output ;
 
@@ -105,7 +106,9 @@ volatile int motor_disp;
 volatile int scaled_pwm;
 volatile float degree5;
 volatile float err_degree; 
-volatile float prop;
+//volatile float prop;
+volatile float time = 0.001;
+volatile float rate_err;
 
 typedef signed int fix16 ;
 #define multfix16(a,b) ((fix16)(((( signed long long)(a))*(( signed long long)(b)))>>16)) //multiply two fixed 16:16
@@ -119,6 +122,13 @@ typedef signed int fix16 ;
 
 fix16 ADC_scale = float2fix16(3.3/1023.0); //Vref/(full scale)
 float adcToDegree(int adc);
+volatile float prev_err_degree;
+volatile float sum_err;
+volatile float kdcounter = 0;
+volatile float prop; 
+volatile float derv;
+volatile float intg;
+volatile float kicap = 50000;
 
 void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void)
 {
@@ -130,7 +140,12 @@ void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void)
     //adc5 = adc5 + ((generate_period/2 - adc5)>>4) ;
     WriteSPI2(DAC_config_chan_A | (adc5  + (2048/2) )); 
     degree5 = adcToDegree(adc5); 
-    err_degree = desired_degree - degree5;
+    err_degree = (float) desired_degree - degree5;
+    rate_err = (err_degree - prev_err_degree); 
+    sum_err = sum_err + (err_degree); 
+    if (sum_err > kicap) sum_err = kicap;
+    else if (sum_err < -kicap)
+        sum_err = -kicap;
     //prop = kp * err_degree;
     
     
@@ -141,12 +156,21 @@ void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void)
     
     mPORTBSetBits(BIT_4); // End Transaction
     
-    pwm_on_time = kp * err_degree;
+    prop = kp * err_degree; 
+    derv = kd * rate_err; 
+    intg = ki * sum_err; 
+    pwm_on_time = (kp * err_degree) + (kd * rate_err) + (ki * sum_err);
     if(pwm_on_time <= 0) pwm_on_time = 0;
     else if (pwm_on_time >= generate_period) pwm_on_time = generate_period;
     
     scaled_pwm = (int) (4096 * ((float)pwm_on_time/(float)generate_period));
     motor_disp = motor_disp + ((scaled_pwm - motor_disp)>>4) ;
+    
+    kdcounter++;
+    if(kdcounter >= 3){
+        prev_err_degree = err_degree;
+        kdcounter = 0;
+    }
     SetDCOC3PWM(pwm_on_time);
     //pwm_on_time = prop_const * (desired_pwn - scaled_pwm);
     
@@ -187,6 +211,41 @@ static PT_THREAD (protothread_timer(struct pt *pt))
         // draw sys_time
         sprintf(buffer,"%d", sys_time_seconds);
         printLine2(1, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+                  
+        sprintf(buffer, "desired_degree=%d\n", desired_degree);       
+        printLine2(2, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+        
+        sprintf(buffer, "kp=%d\n", kp);
+        printLine2(3, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+        
+        sprintf(buffer, "kd=%d\n", kd);
+        printLine2(4, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+        
+        sprintf(buffer, "ki=%f\n", ki);
+        printLine2(5, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+        
+        sprintf(buffer, "pwn_on_time=%f\n", pwm_on_time);
+        printLine2(6, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+        
+        sprintf(buffer, "rate_err=%f\n", rate_err);
+        printLine2(7, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+        
+        sprintf(buffer, "err_degree=%f\n", err_degree);
+        printLine2(8, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+        
+        sprintf(buffer, "P=%f\n", prop);
+        printLine2(9, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+        
+        sprintf(buffer, "D=%f\n", derv);
+        printLine2(10, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+        
+        sprintf(buffer, "I=%f\n", intg);
+        printLine2(11, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+        
+        sprintf(buffer, "actualdegree=%f\n", degree5);
+        printLine2(12, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+        green_text ;
+        cursor_pos(3,1);
         // NEVER exit while
       } // END WHILE(1)
   PT_END(pt);
@@ -205,13 +264,25 @@ static PT_THREAD (protothread_slider(struct pt *pt))
         PT_YIELD_UNTIL(pt, new_slider==1);
         new_slider = 0; //clear flag
         // parse frequency command
+        if (slider_id == 1) {
+            desired_degree = (int)slider_value;
+            sum_err = 0;
+        }
         if (slider_id == 2) {
             kp = (int)slider_value;
+        }
+        if (slider_id == 3){
+            kd = (int)slider_value;
+        }
+        if (slider_id == 4){
+            ki = (float)slider_value;
         }
     } // END WHILE(1)   
     PT_END(pt);  
 } // thread python_string
-
+int new_button;
+int button_id;
+int button_value;
 static PT_THREAD (protothread_serial(struct pt *pt))
 {
     PT_BEGIN(pt);
@@ -249,15 +320,15 @@ static PT_THREAD (protothread_serial(struct pt *pt))
 //            toggle_value = PT_term_buffer[3] - '0';
 //        }
         
-        // pushbutton
-//        if (PT_term_buffer[0]=='b'){
-//            // signal the button thread
-//            new_button = 1;
-//            // subtracting '0' converts ascii to binary for 1 character
-//            button_id = (PT_term_buffer[1] - '0')*10 + (PT_term_buffer[2] - '0');
-//            button_value = PT_term_buffer[3] - '0';
-//        }
-        
+//        // pushbutton
+        if (PT_term_buffer[0]=='b'){
+            // signal the button thread
+            new_button = 1;
+            // subtracting '0' converts ascii to binary for 1 character
+            button_id = (PT_term_buffer[1] - '0')*10 + (PT_term_buffer[2] - '0');
+            button_value = PT_term_buffer[3] - '0';
+        }
+//        
         // slider
         if (PT_term_buffer[0]=='s'){
            sscanf(PT_term_buffer, "%c %d %f", &junk, &slider_id, &slider_value);
@@ -306,16 +377,6 @@ static PT_THREAD (protothread_adc(struct pt *pt))
         PT_YIELD_TIME_msec(100);
          
         
-        // print raw ADC, floating voltage, fixed voltage
-       
-        
-        sprintf(buffer, "Motordisp=%04d\n", motor_disp);
-        
-        printLine2(5, buffer, ILI9340_YELLOW, ILI9340_BLACK);
-        sprintf(buffer, "kp=%04d\n", kp);
-        printLine2(5, buffer, ILI9340_YELLOW, ILI9340_BLACK);
-        green_text ;
-        cursor_pos(3,1);
 //        sprintf(PT_send_buffer,"AN11=%04d AN5=%04d ", adc_11, adc_5);
         PT_SPAWN(pt, &pt_DMA_output, PT_DMA_PutSerialBuffer(&pt_DMA_output) );
 //        clr_right ;
@@ -324,6 +385,29 @@ static PT_THREAD (protothread_adc(struct pt *pt))
       } // END WHILE(1)
   PT_END(pt);
 } // animation thread
+static PT_THREAD (protothread_buttons(struct pt *pt))
+{
+    PT_BEGIN(pt);
+    while(1){
+        PT_YIELD_UNTIL(pt, new_button==1);
+        // clear flag
+        new_button = 0;   
+        // Button one -- control the LED on the big board
+        if (button_id==1 && button_value==1) {
+            desired_degree = 0;
+        }
+        else if (button_id==1 && button_value==0) {
+            desired_degree = 90;
+            PT_YIELD_TIME_msec(5000);
+            desired_degree = 120; 
+            PT_YIELD_TIME_msec(5000);
+            desired_degree = 60;
+            PT_YIELD_TIME_msec(5000);
+            desired_degree = 90;
+       }
+    } // END WHILE(1)   
+    PT_END(pt);  
+} // thread blink
 
 float adcToDegree(int adc) {
     float temp = (float)(adc - min_adc_value); 
@@ -351,7 +435,9 @@ void main(void) {
   motor_disp = 0;
   // === setup system wide interrupts  ========
   INTEnableSystemMultiVectoredInt();
-  pwm_on_time = 0; //generate_period/2;    // the ADC ///////////////////////////////////////
+  pwm_on_time = 0; //generate_period/2; 
+  prev_err_degree = 0; 
+  // the ADC ///////////////////////////////////////
     // configure and enable the ADC
     // Sample Rate of 1kHz, so number of cycles to overflow will be 40MHz / 1kHz
     OpenTimer2(T2_ON | T2_SOURCE_INT | T2_PS_1_1,generate_period - 1  ); 
@@ -418,6 +504,7 @@ void main(void) {
   PT_INIT(&pt_adc);
   PT_INIT(&pt_serial);
   PT_INIT(&pt_slider);
+  PT_INIT(&pt_button);
   // init the display
   tft_init_hw();
   tft_begin();
@@ -435,6 +522,7 @@ void main(void) {
       PT_SCHEDULE(protothread_adc(&pt_adc));
       PT_SCHEDULE(protothread_serial(&pt_serial));
       PT_SCHEDULE(protothread_slider(&pt_slider));
+      PT_SCHEDULE(protothread_buttons(&pt_button));
 
       
       }

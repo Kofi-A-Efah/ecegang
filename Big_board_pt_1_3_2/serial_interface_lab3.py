@@ -71,7 +71,7 @@ def PIC_serial_recv(ser_str, window):
 # ############################ Begin GUI code #############################
 # open microcontroller serial port
 # For windows the device will be 'COMx'
-ser = serial.Serial('COM5', 38400, timeout=0.001)  # open serial port 38400
+ser = serial.Serial('COM4', 38400, timeout=0.001)  # open serial port 38400
 
 #sg.theme('DarkAmber')   # Add a touch of color
 # All the stuff inside your window.
@@ -107,20 +107,21 @@ layout = [  [sg.Text('PID Control',  background_color=heading_color)],
             ],
             #
             [sg.Text('Proportional Gain'),
-            sg.Slider(range=(1,1000), default_value=500, key='slider2',orientation='horizontal',
+            sg.Slider(range=(0,2000), default_value=0, key='slider2',orientation='horizontal', resolution=10,
              font=('Helvetica',12),enable_events=True)
              ],
             #
             [sg.Text('Differential Gain'),
-            sg.Slider(range=(1,1000), default_value=500, key='slider3',orientation='horizontal',
+            sg.Slider(range=(1,10000), default_value=0, key='slider3',orientation='horizontal', resolution=10,
              font=('Helvetica',12),enable_events=True)
              ],
             #
             [sg.Text('Integral Gain'),
-            sg.Slider(range=(1,1000), default_value=500, key='slider4',orientation='horizontal',
+            sg.Slider(range=(0,10), default_value=0, key='slider4',orientation='horizontal', resolution=0.01,
              font=('Helvetica',12),enable_events=True)
-             ],
-            
+             ], 
+            #
+            [sg.RealtimeButton('Angle Control Test', key='pushbut01', font='Helvetica 12')],
             #
             [sg.Text('Serial data from PIC', background_color=heading_color)],
             [sg.Multiline('', size=(50,10), key='console',
@@ -153,7 +154,7 @@ window = sg.Window('ECE4760 Interface', layout, location=(0,0),
 
 # Bind the realtime button release events <ButtonRelease-1>
 # https://github.com/PySimpleGUI/PySimpleGUI/issues/2020
-#window['pushbut01'].bind('<ButtonRelease-1>', 'r')
+window['pushbut01'].bind('<ButtonRelease-1>', 'r')
 #window['pushbut02'].bind('<ButtonRelease-1>', 'r')
 #window['pushbut03'].bind('<ButtonRelease-1>', 'r')
 
@@ -237,45 +238,21 @@ while True:
        window['pic_input'].update('')
        # send to PIC protothreads
        ser.write((input_state).encode())
-
-    elif event == 'pushbut01':
-       # The text from the one-line input field
-       input_state = window.Element('pic_input').get()
-       # add <cr> for PIC
-       input_state = '$0' + input_state + '\r'
-       # zero the input field
-       window['pic_input'].update('')
-       # send to PIC protothreads
-       ser.write((input_state).encode())
-
-
-    #
-    #  serial data to be displayed to the user
-    if event == 'PIC_recv' :
-       # string loopback from PIC, via the serial thread
-       window['console'].update(values[event], append=True)
-    #
-    # serial data to be treated as an interface command
-    # Format is '$' + (2 digit event type) + <space> + value
-    if event == 'PIC_cmd' :
-       cmd_str = values[event]
-       #if it is event type 01 then update time field
-       if cmd_str[1:3]=='01' :
-          # put the value (system time) into the text field
-          window['sys_time'].update(cmd_str[3:len(cmd_str)])
-       # if it event type 02 then toggle a virtual LED
-       if cmd_str[1:3]=='02' :
-          # blink the text field
-          if cmd_str[3] == '1' :
-             window['sys_led'].update(background_color='green')
-          else :       
-             window['sys_led'].update(background_color='red')
+       #
+    # character loopback from PIC
+    while ser.in_waiting > 0:
+       #serial_chars = (ser.read().decode('utf-8'));
+       #window['console'].update(serial_chars+'\n', append=True)
+       pic_char = chr(ser.read(size=1)[0]) 
+       if (pic_char) == '\r' :
+          window['console'].update('\n', append=True)
+       else :
+          window['console'].update((pic_char), append=True)
      
-# stop thread, close port, and Bail out
-thread_stop = 1
-thread_id.join()
-ser.close()           
+# close port and Bail out
+ser.close()             
 window.close()
+
 
 
 
