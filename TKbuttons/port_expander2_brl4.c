@@ -27,8 +27,8 @@ void initPE() {
   volatile int spiClkDiv = 4; // 10 MHz max speed for this DAC
   mPORTBSetPinsDigitalOut(BIT_9); // use RPB9 (pin 21)
   mPORTBSetBits(BIT_9); // CS active low
-  PPSOutput(2, RPB5, SDO2); // use RPB5 (pin 14) for SDO2
-  PPSInput(3, SDI2,RPA4); // SDI2
+  PPSOutput(2, RPB5, SDO1); // use RPB5 (pin 14) for SDO2
+  PPSInput(3, SDI1,RPA4); // SDI2
   
   SpiChnOpen(pe_spi, SPI_OPEN_ON | SPI_OPEN_MODE8 | SPI_OPEN_MSTEN | SPI_OPEN_CKE_REV, spiClkDiv);
   
