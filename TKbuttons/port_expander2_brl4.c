@@ -1,34 +1,34 @@
 #include "port_expander2_brl4.h"
 
-#define SET_CS    {mPORTBSetBits(BIT_9);}
-#define CLEAR_CS  {mPORTBClearBits(BIT_9);}
+#define SET_CS    {mPORTASetBits(BIT_0);}
+#define CLEAR_CS  {mPORTAClearBits(BIT_0);}
 
 // === spi bit widths ====================================================
 // hit the SPI control register directly, SPI2
 // Change the SPI bit modes on the fly, mid-transaction if necessary
-inline void SPI_Mode16(void){  // configure SPI2 for 16-bit mode
-    SPI2CONSET = 0x400;
-    SPI2CONCLR = 0x800;
+inline void SPI1_Mode16(void){  // configure SPI2 for 16-bit mode
+    SPI1CONSET = 0x400;
+    SPI1CONCLR = 0x800;
 }
 // ========
-inline void SPI_Mode8(void){  // configure SPI2 for 8-bit mode
-    SPI2CONCLR = 0x400;
-    SPI2CONCLR = 0x800;
+inline void SPI1_Mode8(void){  // configure SPI2 for 8-bit mode
+    SPI1CONCLR = 0x400;
+    SPI1CONCLR = 0x800;
 }
 // ========
-inline void SPI_Mode32(void){  // configure SPI2 for 32-bit mode
-    SPI2CONCLR = 0x400;
-    SPI2CONSET = 0x800;
+inline void SPI1_Mode32(void){  // configure SPI2 for 32-bit mode
+    SPI1CONCLR = 0x400;
+    SPI1CONSET = 0x800;
 }
 
 void initPE() {
   // control CS for DAC
   volatile SpiChannel pe_spi = SPI_CHANNEL1;
   volatile int spiClkDiv = 4; // 10 MHz max speed for this DAC
-  mPORTBSetPinsDigitalOut(BIT_9); // use RPB9 (pin 21)
-  mPORTBSetBits(BIT_9); // CS active low
-  PPSOutput(2, RPB5, SDO1); // use RPB5 (pin 14) for SDO2
-  PPSInput(3, SDI1,RPA4); // SDI2
+  mPORTASetPinsDigitalOut(BIT_0); // use RPB9 (pin 21)
+  mPORTASetBits(BIT_0); // CS active low
+  PPSOutput(2, RPB1, SDO1); // use RPB5 (pin 14) for SDO2
+  PPSInput(3, SDI1,RPA1); // SDI2
   
   SpiChnOpen(pe_spi, SPI_OPEN_ON | SPI_OPEN_MODE8 | SPI_OPEN_MSTEN | SPI_OPEN_CKE_REV, spiClkDiv);
   
@@ -122,7 +122,7 @@ inline void writePE(unsigned char reg_addr, unsigned char data) {
   // CS low to start transaction
   CLEAR_CS
   // 8-bits
-  SPI_Mode8();
+  SPI1_Mode8();
   // OPCODE and HW Address (Should always be 0b0100000), set LSB for write
   WriteSPI1((PE_OPCODE_HEADER | WRITE));
   // test for done

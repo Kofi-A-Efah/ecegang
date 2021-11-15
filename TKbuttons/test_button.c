@@ -12,6 +12,7 @@
 #include "pt_cornell_1_3_2_python.h"
 // yup, the expander
 #include "port_expander_brl4.h"
+#include "port_expander2_brl4.h"
 
 //volatile SpiChannel spiChn = SPI_CHANNEL2 ;	// the SPI channel to use
 //volatile int spiClkDiv = 4 ; // 10 MHz max speed for prot expander!!
@@ -90,13 +91,18 @@ static PT_THREAD (protothread_key(struct pt *pt))
     //for now 0 - A, 3 - B, etc. 
     static int buttonPresses;
     static int buttonPressesZ;
-    static int bPressed, yPressed, aPressed, xPressed;
+    static int buttonPressesYY;
+    static int buttonPressesZZ;
+    static int bPressed, yPressed, aPressed, xPressed, leftpress, rightpress;
+    static int uppress, downpress, ltpressed, lbpressed, rtpressed, rbpressed;
     while(1) {
         //120 fps
         PT_YIELD_TIME_msec(8);
         //read port expander 1 Y port
-        buttonPresses = readPE(GPIOY);
-        
+        buttonPresses   = readPE(GPIOY);
+        buttonPressesZ  = readPE(GPIOZ);
+        buttonPressesYY = readPE(GPIOYY);
+        buttonPressesZZ = readPE(GPIOZZ);
         //X button read
         if ((!(buttonPresses & 0x40)) && !xPressed) {
             xPressed = 1;
@@ -136,8 +142,80 @@ static PT_THREAD (protothread_key(struct pt *pt))
             if(state_flag == 1) rec_add_button(A, sys_time_frame, 0);
         }
         
+        // left button read
+        if ((!(buttonPressesYY & 0x10)) && !leftpress) {
+            leftpress = 1;
+            if(state_flag == 1) rec_add_button(left, sys_time_frame, 1);
+        }else if (((buttonPressesYY & 0x10)) && leftpress) {
+            leftpress = 0;
+            if(state_flag == 1) rec_add_button(left, sys_time_frame, 0);
+        }        
+          
+        //right button read
+        if ((!(buttonPressesYY & 0x10)) && !rightpress) {
+            rightpress = 1;
+            if(state_flag == 1) rec_add_button(right, sys_time_frame, 1);
+        }else if (((buttonPressesYY & 0x10)) && rightpress) {
+            rightpress = 0;
+            if(state_flag == 1) rec_add_button(right, sys_time_frame, 0);
+        }        
+        
+        
+        // up button read
+        if ((!(buttonPressesYY & 0x10)) && !uppress) {
+            uppress = 1;
+            if(state_flag == 1) rec_add_button(up, sys_time_frame, 1);
+        }else if (((buttonPressesYY & 0x10)) && uppress) {
+            uppress = 0;
+            if(state_flag == 1) rec_add_button(up, sys_time_frame, 0);
+        }        
+        
+        //down button read 
+        if ((!(buttonPressesYY & 0x10)) && !downpress) {
+            downpress = 1;
+            if(state_flag == 1) rec_add_button(down, sys_time_frame, 1);
+        }else if (((buttonPressesYY & 0x10)) && downpress) {
+            downpress = 0;
+            if(state_flag == 1) rec_add_button(down, sys_time_frame, 0);
+        }
+        
+        
+        //LT button read
+        if ((!(buttonPresses & 0x10)) && !ltpressed) {
+            ltpressed = 1;
+            if(state_flag == 1) rec_add_button(LT, sys_time_frame, 1);
+        }else if (((buttonPresses & 0x10)) && ltpressed) {
+            ltpressed = 0;
+            if(state_flag == 1) rec_add_button(LT, sys_time_frame, 0);
+        }        
+        
+        //RT button read
+        if ((!(buttonPresses & 0x10)) && !rtpressed) {
+            rtpressed = 1;
+            if(state_flag == 1) rec_add_button(RT, sys_time_frame, 1);
+        }else if (((buttonPresses & 0x10)) && rtpressed) {
+            rtpressed = 0;
+            if(state_flag == 1) rec_add_button(RT, sys_time_frame, 0);
+        }       
+        
+        //LB button read
+        if ((!(buttonPresses & 0x10)) && !lbpressed) {
+            lbpressed = 1;
+            if(state_flag == 1) rec_add_button(LB, sys_time_frame, 1);
+        }else if (((buttonPresses & 0x10)) && lbpressed) {
+            lbpressed = 0;
+            if(state_flag == 1) rec_add_button(LB, sys_time_frame, 0);
+        }        
+        
+        //RB button read
+        if ((!(buttonPresses & 0x10)) && !rbpressed) {
+            rbpressed = 1;
+            if(state_flag == 1) rec_add_button(RB, sys_time_frame, 1);
+        }else if (((buttonPresses & 0x10)) && rbpressed) {
+            rbpressed = 0;
+            if(state_flag == 1) rec_add_button(RB, sys_time_frame, 0);
+        }
 
-  
         
 //        if(buttonPresses & 0x04){
 //            writePE(GPIOY, (buttonPresses & 0xfd));
