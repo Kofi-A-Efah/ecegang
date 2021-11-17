@@ -48,7 +48,9 @@ static struct { enum buttons button; int timepressed; int buttonState;} press[re
 static int temp_presscount = 0;
 static int presscount = 0;
 volatile int sys_time_frame = 0;
+// Counter doesn't go up until this variable is 1
 static int start_frame_timing = 0;
+// Did the recording end on the left or the right? 0 for left, 1 for right.
 static int left_right;
 
 void rec_add_button(enum buttons button, int timepressed, int buttonState){
@@ -179,8 +181,8 @@ static PT_THREAD (protothread_key(struct pt *pt))
             if(state_flag == 1) rec_add_button(down, sys_time_frame, 0);
         }
         
-        
-        //LT button read
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
+       //LT button read
         if ((!(buttonPresses & 0x10)) && !ltpressed) {
             ltpressed = 1;
             if(state_flag == 1) rec_add_button(LT, sys_time_frame, 1);
@@ -217,27 +219,30 @@ static PT_THREAD (protothread_key(struct pt *pt))
         }
 
         
-//        if(buttonPresses & 0x04){
+//       if(buttonPresses & 0x04){
 //            writePE(GPIOY, (buttonPresses & 0xfd));
 //        }
-
+ 
     }
     
     PT_END(pt);
 } // timer thread
 
  //WIP
+// state_flag: 0 default, 1 record, 2 playback left, 3 playback right
 
+static int recPressed, playLeftPressed, playRightPressed;
 static PT_THREAD (protothread_record(struct pt *pt))
 {
     PT_BEGIN(pt);
     static int record_butt;
     static int playleft;
     static int playright;
-    static int recPressed, playLeftPressed, playRightPressed;
+    //static int recPressed, playLeftPressed, playRightPressed; defined globally
     static int butt_press;
 
     while(1) {
+        
         PT_YIELD_TIME_msec(8);
         butt_press = readPE(GPIOZ);
         //record button logic
@@ -260,6 +265,7 @@ static PT_THREAD (protothread_record(struct pt *pt))
            // Turn on record light            
         } else if (((butt_press & 0x01))) recPressed = 0;
         
+        
         //end recording left
         if ( state_flag == 1 && !( butt_press & 0x02 ) && !playLeftPressed ) { 
              left_right = 0;
@@ -274,7 +280,26 @@ static PT_THREAD (protothread_record(struct pt *pt))
              playLeftPressed = 1;
              mPORTAClearBits(BIT_0);
         } else if ( butt_press & 0x02 ) playLeftPressed = 0;
+        
 
+        // END RECORDING RIGHT
+        
+        
+        if ( state_flag == 1 && !( butt_press & 0x03 ) && !playRightPressed ) { 
+             left_right = 1;
+             int i; 
+             presscount = temp_presscount;
+             for (i = 0; i < temp_presscount; i++) {
+                press[i].button = temp_press[i].button;
+                press[i].timepressed = temp_press[i].timepressed;
+                press[i].buttonState = temp_press[i].buttonState;
+             }
+             state_flag = 0;
+             playRightPressed = 1;
+             mPORTAClearBits(BIT_0);
+        } else if ( butt_press & 0x03 ) playRightPressed = 0;   
+        
+        
         //playback left
         if ( state_flag == 0 && !( butt_press & 0x02 ) && !playLeftPressed) {
             sys_time_frame = 0;
@@ -291,18 +316,24 @@ static PT_THREAD (protothread_record(struct pt *pt))
 //                        writePE(GPIOY, (0x08));
 //                    }  
 //                }
+            
             playLeftPressed = 1;
         } else if ( butt_press & 0x02 ) playLeftPressed = 0;
         
-        if ( state_flag == 0 && !( butt_press & 0x03 ) ) { //playback right
-            
-        }
+       
+        //playback right        
+        if ( state_flag == 0 && !( butt_press & 0x03 ) ) { 
+            sys_time_frame = 0;
+            start_frame_timing = 1;
+            if (presscount != 0) {
+              state_flag = 3;   
+            }
+                        
+            playRightPressed = 1;      
+        } else if ( butt_press & 0x03 ) playRightPressed = 1;
         
-        
-        
-        
+
     }
-    
     PT_END(pt);
 }
 
@@ -339,8 +370,59 @@ static PT_THREAD (protothread_playback(struct pt *pt))
                             if(press[current_press].buttonState == 1){
                                 writePE(GPIOY, (temp_GPIOY | 0x20));
                             } else writePE(GPIOY, (temp_GPIOY & 0xdf));
+
+// reverse directions depending on which playback is pressed                             
+                            
+                        case left:
+                            if ( state_flag = 3 && playRightPressed  ) {
+                                press[current_press].button = right; // reverse directions
+                            }
+                            if(press[current_press].buttonState == 1){
+                                writePE(GPIOY, (temp_GPIOY | 0x80));
+                            } else writePE(GPIOY, (temp_GPIOY & 0x7f));
                             break;
                             
+                        case right:
+                            if (state_flag = 3 && playRightPressed ) {
+                               press[current_press].button = left; 
+                            }
+                            if(press[current_press].buttonState == 1){
+                                writePE(GPIOY, (temp_GPIOY | 0x08));
+                            } else writePE(GPIOY, (temp_GPIOY & 0xf7));
+                            break;
+                            
+                        case up:
+                            if(press[current_press].buttonState == 1){
+                                writePE(GPIOY, (temp_GPIOY | 0x02));
+                            } else writePE(GPIOY, (temp_GPIOY & 0xfd));
+                            break;
+                        case down:
+                            if(press[current_press].buttonState == 1){
+                                writePE(GPIOY, (temp_GPIOY | 0x20));
+                            } else writePE(GPIOY, (temp_GPIOY & 0xdf));
+                            break;  
+                            
+                        case LT:
+                            if(press[current_press].buttonState == 1){
+                                writePE(GPIOY, (temp_GPIOY | 0x80));
+                            } else writePE(GPIOY, (temp_GPIOY & 0x7f));
+                            break;
+                        case RT:
+                            if(press[current_press].buttonState == 1){
+                                writePE(GPIOY, (temp_GPIOY | 0x08));
+                            } else writePE(GPIOY, (temp_GPIOY & 0xf7));
+                            break;
+                        case RB:
+                            if(press[current_press].buttonState == 1){
+                                writePE(GPIOY, (temp_GPIOY | 0x02));
+                            } else writePE(GPIOY, (temp_GPIOY & 0xfd));
+                            break;
+                        case LB:
+                            if(press[current_press].buttonState == 1){
+                                writePE(GPIOY, (temp_GPIOY | 0x20));
+                            } else writePE(GPIOY, (temp_GPIOY & 0xdf));
+                            break;  
+                    
                     }
                     current_press++;
                 }
