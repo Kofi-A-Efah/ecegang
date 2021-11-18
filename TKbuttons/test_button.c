@@ -14,6 +14,8 @@
 #include "port_expander_brl4.h"
 #include "port_expander2_brl4.h"
 
+
+
 //volatile SpiChannel spiChn = SPI_CHANNEL2 ;	// the SPI channel to use
 //volatile int spiClkDiv = 4 ; // 10 MHz max speed for prot expander!!
 
@@ -91,138 +93,166 @@ static PT_THREAD (protothread_key(struct pt *pt))
     PT_BEGIN(pt);
     //read ports are odd, write ports are even ((0(0x01), 1(0x02)) (2(0x04), 3(0x08)) etc)
     //for now 0 - A, 3 - B, etc. 
-    static int buttonPresses;
+    //PORT EXPANDER 2 (BOTTOM)  // PORT EXPANDER 1 (TOP)
+    // SO2 - RB2        // SI1 - RB1 
+    // SI2 - RB5        // SO1 - RA1
+    // CS - RB9        //  SCK - RB14
+    // SCK2 - RB15      // CS - RA0
+    //RA 4
+
+    // JOYSTICK (PORTY)
+    // UP  0 & 1
+    // LEFT  2 & 3
+    // RIGHT 4 & 5
+    // DOWN  6 & 7
+
+    //LED ON A4 OF PIC32
+
+    //PORTZZ
+    //Z0 Z1 Z2 (PLAYBACK LEFT ,REC, PLAYBACKRIGHT)
+
+    //PORTYY
+    // B Y A X
+    // Y IS 0 & 1
+    // X IS 2 & 3
+    // A IS 4 & 5
+    // B IS 6 & 7
+
+    // PORTZZ
+    // LT LB RT RB
+    // RT 0 & 1
+    // RB 2 & 3
+    // LB 4 & 5
+    // LT 6 & 7
+    static int buttonPressesY;
     static int buttonPressesZ;
     static int buttonPressesYY;
     static int buttonPressesZZ;
-    static int bPressed, yPressed, aPressed, xPressed, leftpress, rightpress;
-    static int uppress, downpress, ltpressed, lbpressed, rtpressed, rbpressed;
+    static int bPressed, yPressed, aPressed, xPressed, leftPressed, rightPressed;
+    static int upPressed, downPressed, ltPressed, lbPressed, rtPressed, rbPressed;
     while(1) {
         //120 fps
         PT_YIELD_TIME_msec(8);
         //read port expander 1 Y port
-        buttonPresses   = readPE(GPIOY);
+        buttonPressesY   = readPE(GPIOY);
         buttonPressesZ  = readPE(GPIOZ);
-        buttonPressesYY = readPE(GPIOYY);
-        buttonPressesZZ = readPE(GPIOZZ);
+        buttonPressesYY = readPE2(GPIOYY);
+        buttonPressesZZ = readPE2(GPIOZZ);
+        
+        //YXAB Buttons
+        
+        //Y button read
+        if ((!(buttonPressesYY & 0x01)) && !yPressed ) {
+            //mPORTAToggleBits(BIT_0);
+            yPressed = 1;
+            if(state_flag == 1) rec_add_button(B, sys_time_frame, 1);
+        } else if ((buttonPressesYY & 0x01) && yPressed){
+            yPressed = 0;
+            if(state_flag == 1) rec_add_button(B, sys_time_frame, 0);
+        }
+        
         //X button read
-        if ((!(buttonPresses & 0x40)) && !xPressed) {
+        if ((!(buttonPressesYY & 0x04)) && !xPressed) {
             xPressed = 1;
             if(state_flag == 1) rec_add_button(X, sys_time_frame, 1);
-        }else if (((buttonPresses & 0x40)) && xPressed) {
+        }else if (((buttonPressesYY & 0x04)) && xPressed) {
             xPressed = 0;
             if(state_flag == 1) rec_add_button(X, sys_time_frame, 0);
         }
         
-        //B button read
-        if ((!(buttonPresses & 0x01)) && !bPressed ) {
-            //mPORTAToggleBits(BIT_0);
-            bPressed = 1;
-            if(state_flag == 1) rec_add_button(B, sys_time_frame, 1);
-        } else if ((buttonPresses & 0x01) && bPressed){
-            bPressed = 0;
-            if(state_flag == 1) rec_add_button(B, sys_time_frame, 0);
-        }
-        
-        //Y button read
-        if ((!(buttonPresses & 0x04)) && !yPressed ) {
-            //writePE(GPIOY, (buttonPresses | 0x02));
-            //mPORTAToggleBits(BIT_0);
-            yPressed = 1;
-            if(state_flag == 1) rec_add_button(Y, sys_time_frame, 1);
-        } else if ((buttonPresses & 0x04) && yPressed){
-            yPressed = 0;
-            if(state_flag == 1) rec_add_button(Y, sys_time_frame, 0);
-        }
-        
         //A button read
-        if ((!(buttonPresses & 0x10)) && !aPressed) {
+        if ((!(buttonPressesYY & 0x10)) && !aPressed) {
             aPressed = 1;
             if(state_flag == 1) rec_add_button(A, sys_time_frame, 1);
-        }else if (((buttonPresses & 0x10)) && aPressed) {
+        }else if (((buttonPressesYY & 0x10)) && aPressed) {
             aPressed = 0;
             if(state_flag == 1) rec_add_button(A, sys_time_frame, 0);
         }
         
-        // left button read
-        if ((!(buttonPressesYY & 0x10)) && !leftpress) {
-            leftpress = 1;
+        //B button read
+        if ((!(buttonPressesYY & 0x40)) && !bPressed) {
+            aPressed = 1;
+            if(state_flag == 1) rec_add_button(B, sys_time_frame, 1);
+        }else if (((buttonPressesYY & 0x40)) && bPressed) {
+            bPressed = 0;
+            if(state_flag == 1) rec_add_button(B, sys_time_frame, 0);
+        }
+        
+        //Joystick
+        
+        //Up button read
+        if ((!(buttonPressesY & 0x01)) && !upPressed ) {
+            upPressed = 1;
+            if(state_flag == 1) rec_add_button(up, sys_time_frame, 1);
+        } else if ((buttonPressesY & 0x01) && upPressed){
+            upPressed = 0;
+            if(state_flag == 1) rec_add_button(up, sys_time_frame, 0);
+        }
+        
+        // Left button read
+        if ((!(buttonPressesY & 0x04)) && !leftPressed) {
+            leftPressed = 1;
             if(state_flag == 1) rec_add_button(left, sys_time_frame, 1);
-        }else if (((buttonPressesYY & 0x10)) && leftpress) {
-            leftpress = 0;
+        }else if (((buttonPressesY & 0x04)) && leftPressed) {
+            leftPressed = 0;
             if(state_flag == 1) rec_add_button(left, sys_time_frame, 0);
         }        
           
-        //right button read
-        if ((!(buttonPressesYY & 0x10)) && !rightpress) {
-            rightpress = 1;
+        //Right button read
+        if ((!(buttonPressesY & 0x10)) && !rightPressed) {
+            rightPressed = 1;
             if(state_flag == 1) rec_add_button(right, sys_time_frame, 1);
-        }else if (((buttonPressesYY & 0x10)) && rightpress) {
-            rightpress = 0;
+        }else if (((buttonPressesY & 0x10)) && rightPressed) {
+            rightPressed = 0;
             if(state_flag == 1) rec_add_button(right, sys_time_frame, 0);
         }        
         
-        
-        // up button read
-        if ((!(buttonPressesYY & 0x10)) && !uppress) {
-            uppress = 1;
-            if(state_flag == 1) rec_add_button(up, sys_time_frame, 1);
-        }else if (((buttonPressesYY & 0x10)) && uppress) {
-            uppress = 0;
-            if(state_flag == 1) rec_add_button(up, sys_time_frame, 0);
-        }        
-        
-        //down button read 
-        if ((!(buttonPressesYY & 0x10)) && !downpress) {
-            downpress = 1;
+        // Down button read
+        if ((!(buttonPressesY & 0x40)) && !downPressed) {
+            downPressed = 1;
             if(state_flag == 1) rec_add_button(down, sys_time_frame, 1);
-        }else if (((buttonPressesYY & 0x10)) && downpress) {
-            downpress = 0;
+        }else if (((buttonPressesY & 0x40)) && downPressed) {
+            downPressed = 0;
             if(state_flag == 1) rec_add_button(down, sys_time_frame, 0);
-        }
-        
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
-       //LT button read
-        if ((!(buttonPresses & 0x10)) && !ltpressed) {
-            ltpressed = 1;
-            if(state_flag == 1) rec_add_button(LT, sys_time_frame, 1);
-        }else if (((buttonPresses & 0x10)) && ltpressed) {
-            ltpressed = 0;
-            if(state_flag == 1) rec_add_button(LT, sys_time_frame, 0);
-        }        
-        
-        //RT button read
-        if ((!(buttonPresses & 0x10)) && !rtpressed) {
-            rtpressed = 1;
-            if(state_flag == 1) rec_add_button(RT, sys_time_frame, 1);
-        }else if (((buttonPresses & 0x10)) && rtpressed) {
-            rtpressed = 0;
-            if(state_flag == 1) rec_add_button(RT, sys_time_frame, 0);
         }       
         
-        //LB button read
-        if ((!(buttonPresses & 0x10)) && !lbpressed) {
-            lbpressed = 1;
-            if(state_flag == 1) rec_add_button(LB, sys_time_frame, 1);
-        }else if (((buttonPresses & 0x10)) && lbpressed) {
-            lbpressed = 0;
-            if(state_flag == 1) rec_add_button(LB, sys_time_frame, 0);
+        //RT RB LT LB buttons
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
+       //RT button read
+        if ((!(buttonPressesZZ & 0x01)) && !rtPressed) {
+            rtPressed = 1;
+            if(state_flag == 1) rec_add_button(RT, sys_time_frame, 1);
+        }else if (((buttonPressesZZ & 0x01)) && rtPressed) {
+            rtPressed = 0;
+            if(state_flag == 1) rec_add_button(RT, sys_time_frame, 0);
         }        
         
         //RB button read
-        if ((!(buttonPresses & 0x10)) && !rbpressed) {
-            rbpressed = 1;
-            if(state_flag == 1) rec_add_button(RB, sys_time_frame, 1);
-        }else if (((buttonPresses & 0x10)) && rbpressed) {
-            rbpressed = 0;
-            if(state_flag == 1) rec_add_button(RB, sys_time_frame, 0);
-        }
-
+        if ((!(buttonPressesZZ & 0x04)) && !rbPressed) {
+            rbPressed = 1;
+            if(state_flag == 1) rec_add_button(LT, sys_time_frame, 1);
+        }else if (((buttonPressesZZ & 0x04)) && rbPressed) {
+            rbPressed = 0;
+            if(state_flag == 1) rec_add_button(LT, sys_time_frame, 0);
+        }       
         
-//       if(buttonPresses & 0x04){
-//            writePE(GPIOY, (buttonPresses & 0xfd));
-//        }
- 
+        //LT button read
+        if ((!(buttonPressesZZ & 0x10)) && !ltPressed) {
+            ltPressed = 1;
+            if(state_flag == 1) rec_add_button(LT, sys_time_frame, 1);
+        }else if (((buttonPressesZZ & 0x10)) && ltPressed) {
+            ltPressed = 0;
+            if(state_flag == 1) rec_add_button(LT, sys_time_frame, 0);
+        }        
+        
+        //LB button read
+        if ((!(buttonPressesZZ & 0x10)) && !lbPressed) {
+            lbPressed = 1;
+            if(state_flag == 1) rec_add_button(LB, sys_time_frame, 1);
+        }else if (((buttonPressesZZ & 0x10)) && lbPressed) {
+            lbPressed = 0;
+            if(state_flag == 1) rec_add_button(LB, sys_time_frame, 0);
+        }
     }
     
     PT_END(pt);
@@ -246,14 +276,14 @@ static PT_THREAD (protothread_record(struct pt *pt))
         PT_YIELD_TIME_msec(8);
         butt_press = readPE(GPIOZ);
         //record button logic
-        if ( !( butt_press & 0x01) && !recPressed) { // Check if button is pressed if pressed disable playback 
+        if ( !( butt_press & 0x02) && !recPressed) { // Check if button is pressed if pressed disable playback 
             recPressed = 1;
             if (state_flag == 1) {
-                mPORTAClearBits(BIT_0);
+                mPORTAClearBits(BIT_4);
                 state_flag == 0;
             }  
             else {
-                mPORTASetBits(BIT_0);
+                mPORTASetBits(BIT_4);
                 state_flag = 1;
                 sys_time_frame = 0;
                 start_frame_timing = 0;
@@ -263,11 +293,11 @@ static PT_THREAD (protothread_record(struct pt *pt))
             }
            
            // Turn on record light            
-        } else if (((butt_press & 0x01))) recPressed = 0;
+        } else if (((butt_press & 0x02))) recPressed = 0;
         
         
         //end recording left
-        if ( state_flag == 1 && !( butt_press & 0x02 ) && !playLeftPressed ) { 
+        if ( state_flag == 1 && !( butt_press & 0x01 ) && !playLeftPressed ) { 
              left_right = 0;
              int i; 
              presscount = temp_presscount;
@@ -278,14 +308,14 @@ static PT_THREAD (protothread_record(struct pt *pt))
              }
              state_flag = 0;
              playLeftPressed = 1;
-             mPORTAClearBits(BIT_0);
-        } else if ( butt_press & 0x02 ) playLeftPressed = 0;
+             mPORTAClearBits(BIT_4);
+        } else if ( butt_press & 0x01 ) playLeftPressed = 0;
         
 
         // END RECORDING RIGHT
         
         
-        if ( state_flag == 1 && !( butt_press & 0x03 ) && !playRightPressed ) { 
+        if ( state_flag == 1 && !( butt_press & 0x04 ) && !playRightPressed ) { 
              left_right = 1;
              int i; 
              presscount = temp_presscount;
@@ -296,33 +326,23 @@ static PT_THREAD (protothread_record(struct pt *pt))
              }
              state_flag = 0;
              playRightPressed = 1;
-             mPORTAClearBits(BIT_0);
-        } else if ( butt_press & 0x03 ) playRightPressed = 0;   
+             mPORTAClearBits(BIT_4);
+        } else if ( butt_press & 0x04 ) playRightPressed = 0;   
         
         
         //playback left
-        if ( state_flag == 0 && !( butt_press & 0x02 ) && !playLeftPressed) {
+        if ( state_flag == 0 && !( butt_press & 0x01 ) && !playLeftPressed) {
             sys_time_frame = 0;
             start_frame_timing = 1;
             if (presscount != 0) {
                 state_flag = 2;
             }
-//                for (i = 0; i < presscount; i++){
-//                    while (sys_time_frame < press[presscount].timepressed);
-//                    if (press[presscount].button == A) {
-//                        writePE(GPIOY, (0x02));
-//                    }
-//                    if (press[presscount].button == B) {
-//                        writePE(GPIOY, (0x08));
-//                    }  
-//                }
-            
             playLeftPressed = 1;
-        } else if ( butt_press & 0x02 ) playLeftPressed = 0;
+        } else if ( butt_press & 0x01 ) playLeftPressed = 0;
         
        
         //playback right        
-        if ( state_flag == 0 && !( butt_press & 0x03 ) ) { 
+        if ( state_flag == 0 && !( butt_press & 0x04 ) ) { 
             sys_time_frame = 0;
             start_frame_timing = 1;
             if (presscount != 0) {
@@ -330,7 +350,7 @@ static PT_THREAD (protothread_record(struct pt *pt))
             }
                         
             playRightPressed = 1;      
-        } else if ( butt_press & 0x03 ) playRightPressed = 1;
+        } else if ( butt_press & 0x04 ) playRightPressed = 1;
         
 
     }
@@ -340,7 +360,7 @@ static PT_THREAD (protothread_record(struct pt *pt))
 static PT_THREAD (protothread_playback(struct pt *pt))
 {
     PT_BEGIN(pt);
-    static int current_press, temp_GPIOY;
+    static int current_press, temp_GPIOY, temp_GPIOZ, temp_GPIOYY, temp_GPIOZZ;
         while(1) {
             PT_YIELD_TIME_msec(8);
             //check to see if we are in playback mode
@@ -348,80 +368,111 @@ static PT_THREAD (protothread_playback(struct pt *pt))
                 //check "current press" (next button to be pressed)
                 while(press[current_press].timepressed <= sys_time_frame){
                     temp_GPIOY = readPE(GPIOY);
+                    temp_GPIOYY = readPE2(GPIOYY);
+                    temp_GPIOZZ = readPE2(GPIOZZ);
+                    // JOYSTICK (PORTY)
+                    // UP  0 & 1
+                    // LEFT  2 & 3
+                    // RIGHT 4 & 5
+                    // DOWN  6 & 7
+
+                    //LED ON A4 OF PIC32
+
+                    //PORTZZ
+                    //Z0 Z1 Z2 (PLAYBACK LEFT ,REC, PLAYBACKRIGHT)
+
+                    //PORTYY
+                    // B Y A X
+                    // Y IS 0 & 1
+                    // X IS 2 & 3
+                    // A IS 4 & 5
+                    // B IS 6 & 7
+
+                    // PORTZZ
+                    // LT LB RT RB
+                    // RT 0 & 1
+                    // RB 2 & 3
+                    // LB 4 & 5
+                    // LT 6 & 7
                     //check which button must be pressed
-                    // TODO: get multiple buttons pressing at once working
                     switch (press[current_press].button){
-                        case X:
-                            if(press[current_press].buttonState == 1){
-                                writePE(GPIOY, (temp_GPIOY | 0x80));
-                            } else writePE(GPIOY, (temp_GPIOY & 0x7f));
-                            break;
+                        
+                        //YXAB Buttons
+                        
                         case Y:
                             if(press[current_press].buttonState == 1){
-                                writePE(GPIOY, (temp_GPIOY | 0x08));
-                            } else writePE(GPIOY, (temp_GPIOY & 0xf7));
+                                writePE2(GPIOYY, (temp_GPIOYY | 0x02));
+                            } else writePE2(GPIOYY, (temp_GPIOYY & 0xfd));
                             break;
-                        case B:
+                        case X:
                             if(press[current_press].buttonState == 1){
-                                writePE(GPIOY, (temp_GPIOY | 0x02));
-                            } else writePE(GPIOY, (temp_GPIOY & 0xfd));
+                                writePE2(GPIOY, (temp_GPIOYY | 0x08));
+                            } else writePE2(GPIOY, (temp_GPIOYY & 0xf7));
                             break;
                         case A:
                             if(press[current_press].buttonState == 1){
-                                writePE(GPIOY, (temp_GPIOY | 0x20));
-                            } else writePE(GPIOY, (temp_GPIOY & 0xdf));
+                                writePE2(GPIOY, (temp_GPIOYY | 0x20));
+                            } else writePE2(GPIOY, (temp_GPIOYY & 0xdf));
+                        case B:
+                            if(press[current_press].buttonState == 1){
+                                writePE2(GPIOY, (temp_GPIOYY | 0x80));
+                            } else writePE2(GPIOY, (temp_GPIOYY & 0x7f));
+                            break;
 
 // reverse directions depending on which playback is pressed                             
-                            
-                        case left:
-                            if ( state_flag = 3 && playRightPressed  ) {
-                                press[current_press].button = right; // reverse directions
-                            }
-                            if(press[current_press].buttonState == 1){
-                                writePE(GPIOY, (temp_GPIOY | 0x80));
-                            } else writePE(GPIOY, (temp_GPIOY & 0x7f));
-                            break;
-                            
-                        case right:
-                            if (state_flag = 3 && playRightPressed ) {
-                               press[current_press].button = left; 
-                            }
-                            if(press[current_press].buttonState == 1){
-                                writePE(GPIOY, (temp_GPIOY | 0x08));
-                            } else writePE(GPIOY, (temp_GPIOY & 0xf7));
-                            break;
                             
                         case up:
                             if(press[current_press].buttonState == 1){
                                 writePE(GPIOY, (temp_GPIOY | 0x02));
                             } else writePE(GPIOY, (temp_GPIOY & 0xfd));
+                            break;       
+                        case left:
+                            if ( state_flag = 3 && left_right == 0  ) {
+                                if(press[current_press].buttonState == 1){
+                                    writePE(GPIOY, (temp_GPIOY | 0x20));
+                                } else writePE(GPIOY, (temp_GPIOY & 0xdf));
+                            }
+                            else if(press[current_press].buttonState == 1){
+                                writePE(GPIOY, (temp_GPIOY | 0x08));
+                            } else writePE(GPIOY, (temp_GPIOY & 0x7f));
+                            break;
+                        case right:
+                            if (state_flag = 3 && left_right == 0 ) {
+                                if(press[current_press].buttonState == 1){
+                                    writePE(GPIOY, (temp_GPIOY | 0x08));
+                                } else writePE(GPIOY, (temp_GPIOY & 0x7f));
+                            }
+                            else if(press[current_press].buttonState == 1){
+                                writePE(GPIOY, (temp_GPIOY | 0x20));
+                            } else writePE(GPIOY, (temp_GPIOY & 0xdf));
                             break;
                         case down:
                             if(press[current_press].buttonState == 1){
-                                writePE(GPIOY, (temp_GPIOY | 0x20));
-                            } else writePE(GPIOY, (temp_GPIOY & 0xdf));
-                            break;  
-                            
-                        case LT:
-                            if(press[current_press].buttonState == 1){
                                 writePE(GPIOY, (temp_GPIOY | 0x80));
                             } else writePE(GPIOY, (temp_GPIOY & 0x7f));
-                            break;
+                            break;  
+                            
+                        //RT RB LT LB Buttons   
+                            
                         case RT:
                             if(press[current_press].buttonState == 1){
-                                writePE(GPIOY, (temp_GPIOY | 0x08));
-                            } else writePE(GPIOY, (temp_GPIOY & 0xf7));
+                                writePE2(GPIOZZ, (temp_GPIOZZ | 0x02));
+                            } else writePE2(GPIOZZ, (temp_GPIOZZ & 0xfd));
                             break;
                         case RB:
                             if(press[current_press].buttonState == 1){
-                                writePE(GPIOY, (temp_GPIOY | 0x02));
-                            } else writePE(GPIOY, (temp_GPIOY & 0xfd));
+                                writePE2(GPIOZZ, (temp_GPIOZZ | 0x08));
+                            } else writePE2(GPIOZZ, (temp_GPIOZZ & 0xf7));
                             break;
+                        case LT:
+                            if(press[current_press].buttonState == 1){
+                                writePE2(GPIOZZ, (temp_GPIOZZ | 0x20));
+                            } else writePE2(GPIOZZ, (temp_GPIOZZ & 0xdf));
                         case LB:
                             if(press[current_press].buttonState == 1){
-                                writePE(GPIOY, (temp_GPIOY | 0x20));
-                            } else writePE(GPIOY, (temp_GPIOY & 0xdf));
-                            break;  
+                                writePE2(GPIOZZ, (temp_GPIOZZ | 0x80));
+                            } else writePE2(GPIOZZ, (temp_GPIOZZ & 0x7f));
+                            break; 
                     
                     }
                     current_press++;
@@ -429,6 +480,9 @@ static PT_THREAD (protothread_playback(struct pt *pt))
                 if (current_press > presscount){
                     state_flag = 0;
                     writePE(GPIOY, 0x00);
+                    writePE(GPIOZ, 0x00);
+                    writePE2(GPIOYY, 0x00);
+                    writePE2(GPIOZZ, 0x00);
                 }
             } else current_press = 0;
         }
@@ -444,9 +498,9 @@ static PT_THREAD (protothread_anim(struct pt *pt))
      printLine(0, buffer, ILI9340_WHITE, ILI9340_BLACK);
      
      // set up LED to blink
-     mPORTAClearBits(BIT_0 );	//Clear bits to ensure light is off.
-     mPORTASetPinsDigitalOut(BIT_0 );    //Set port as output
-     mPORTAClearBits(BIT_0 );
+     mPORTAClearBits(BIT_4 );	//Clear bits to ensure light is off.
+     mPORTASetPinsDigitalOut(BIT_4 );    //Set port as output
+     mPORTAClearBits(BIT_4 );
       while(1) {
         // yield time 1 second
         PT_YIELD_TIME_msec(8) ;
@@ -477,29 +531,45 @@ int main(void) {
     
     PT_setup();
     initPE();
+    initPE2();
+    
     INTEnableSystemMultiVectoredInt();
     // PortY on Expander ports as digital outputs
     mPortYSetPinsOut(BIT_1 | BIT_3 | BIT_5 | BIT_7);    //Set port as output
     // PortY as inputs
     mPortYSetPinsIn(BIT_0 | BIT_2 | BIT_4 | BIT_6);    //Set port as input
     mPortZSetPinsIn(BIT_0 | BIT_1 | BIT_2);    //Set port as input
+    // PortYY on Expander ports as digital outputs
+    mPortYYSetPinsOut(BIT_1 | BIT_3 | BIT_5 | BIT_7);    //Set port as output
+    // PortYY as inputs
+    mPortYYSetPinsIn(BIT_0 | BIT_2 | BIT_4 | BIT_6);    //Set port as input
+    // PortZZ on Expander ports as digital outputs
+    mPortZZSetPinsOut(BIT_1 | BIT_3 | BIT_5 | BIT_7);    //Set port as output
+    // PortZZ as inputs
+    mPortZZSetPinsIn(BIT_0 | BIT_2 | BIT_4 | BIT_6);    //Set port as input
+    
     
    // mPortYEnablePullUp(BIT_0);
-    tft_init_hw();
-    tft_begin();
-    tft_fillScreen(ILI9340_BLACK);
-    //240x320 vertical display
-    tft_setRotation(0); // Use tft_setRotation(1) for 320x240    
-    mPORTAClearBits(BIT_0);	//Clear bits to ensure light is off.
-    mPORTASetPinsDigitalOut(BIT_0);    //Set port as output
+//    tft_init_hw();
+//    tft_begin();
+//    tft_fillScreen(ILI9340_BLACK);
+//    //240x320 vertical display
+//    tft_setRotation(0); // Use tft_setRotation(1) for 320x240    
+    mPORTAClearBits(BIT_4);	//Clear bits to ensure light is off.
+    mPORTASetPinsDigitalOut(BIT_4);    //Set port as output
 
+    writePE(GPIOY, 0xff);
+    writePE(GPIOY, 0x00);
+    writePE2(GPIOZZ, (0xff));
+    writePE2(GPIOZZ, 0x00);
+    
     PT_INIT(&pt_key);
-    PT_INIT(&pt_anim);
+//    PT_INIT(&pt_anim);
     PT_INIT(&pt_record);
     PT_INIT(&pt_playback);
     while (1) {
         PT_SCHEDULE(protothread_key(&pt_key));      
-        PT_SCHEDULE(protothread_anim(&pt_anim));    
+//        PT_SCHEDULE(protothread_anim(&pt_anim));    
         PT_SCHEDULE(protothread_record(&pt_record));
         
         PT_SCHEDULE(protothread_playback(&pt_playback));        
