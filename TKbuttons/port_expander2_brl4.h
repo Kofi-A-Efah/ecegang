@@ -65,7 +65,7 @@
  * Sets the clock divisor for pb_clock to 4, giving 10MHz (fastest possible for
  * our MCP23S17 package)
  */
-void initPE();
+void initPE2();
 
 void mPortYYSetPinsOut(unsigned char);
 
@@ -94,11 +94,11 @@ void mPortZZDisablePullUp(unsigned char);
 
 /* Takes a register address on port expander and a data byte, and writes the 
  * data to the target register. */
-inline void writePE(unsigned char, unsigned char);
+inline void writePE2(unsigned char, unsigned char);
 
 /* Takes a register address on port expander and returns the data byte from that
  * target register. */
-inline unsigned char readPE(unsigned char);
+inline unsigned char readPE2(unsigned char);
 
 // spi2 lock so that port expander OR DAC can use the channel
 extern volatile int spi1_lock ;

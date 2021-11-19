@@ -12,7 +12,7 @@
 #include "pt_cornell_1_3_2_python.h"
 // yup, the expander
 #include "port_expander_brl4.h"
-#include "port_expander2_brl4.h"
+//#include "port_expander2_brl4.h"
 
 
 
@@ -63,7 +63,7 @@ void rec_add_button(enum buttons button, int timepressed, int buttonState){
     temp_presscount++;
 }
 
-static struct pt pt_key, pt_anim, pt_record, pt_playback; ;
+static struct pt pt_key, pt_anim, pt_record, pt_playback, pt_spitest, pt_spitest2;
 static int xc=10, yc=150, vxc=2, vyc=0;
 //time from button pressed interrupt
 void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void) {
@@ -106,7 +106,7 @@ static PT_THREAD (protothread_key(struct pt *pt))
     // RIGHT 4 & 5
     // DOWN  6 & 7
 
-    //LED ON A4 OF PIC32
+    //LED ON A2 OF PIC32
 
     //PORTZZ
     //Z0 Z1 Z2 (PLAYBACK LEFT ,REC, PLAYBACKRIGHT)
@@ -136,8 +136,8 @@ static PT_THREAD (protothread_key(struct pt *pt))
         //read port expander 1 Y port
         buttonPressesY   = readPE(GPIOY);
         buttonPressesZ  = readPE(GPIOZ);
-        buttonPressesYY = readPE2(GPIOYY);
-        buttonPressesZZ = readPE2(GPIOZZ);
+        buttonPressesYY = readPE2(GPIOY);
+        buttonPressesZZ = readPE2(GPIOZ);
         
         //YXAB Buttons
         
@@ -279,11 +279,11 @@ static PT_THREAD (protothread_record(struct pt *pt))
         if ( !( butt_press & 0x02) && !recPressed) { // Check if button is pressed if pressed disable playback 
             recPressed = 1;
             if (state_flag == 1) {
-                mPORTAClearBits(BIT_4);
+                mPORTAClearBits(BIT_2);
                 state_flag == 0;
             }  
             else {
-                mPORTASetBits(BIT_4);
+                mPORTASetBits(BIT_2);
                 state_flag = 1;
                 sys_time_frame = 0;
                 start_frame_timing = 0;
@@ -308,7 +308,7 @@ static PT_THREAD (protothread_record(struct pt *pt))
              }
              state_flag = 0;
              playLeftPressed = 1;
-             mPORTAClearBits(BIT_4);
+             mPORTAClearBits(BIT_2);
         } else if ( butt_press & 0x01 ) playLeftPressed = 0;
         
 
@@ -326,7 +326,7 @@ static PT_THREAD (protothread_record(struct pt *pt))
              }
              state_flag = 0;
              playRightPressed = 1;
-             mPORTAClearBits(BIT_4);
+             mPORTAClearBits(BIT_2);
         } else if ( butt_press & 0x04 ) playRightPressed = 0;   
         
         
@@ -368,8 +368,8 @@ static PT_THREAD (protothread_playback(struct pt *pt))
                 //check "current press" (next button to be pressed)
                 while(press[current_press].timepressed <= sys_time_frame){
                     temp_GPIOY = readPE(GPIOY);
-                    temp_GPIOYY = readPE2(GPIOYY);
-                    temp_GPIOZZ = readPE2(GPIOZZ);
+                    temp_GPIOYY = readPE2(GPIOY);
+                    temp_GPIOZZ = readPE2(GPIOZ);
                     // JOYSTICK (PORTY)
                     // UP  0 & 1
                     // LEFT  2 & 3
@@ -401,8 +401,8 @@ static PT_THREAD (protothread_playback(struct pt *pt))
                         
                         case Y:
                             if(press[current_press].buttonState == 1){
-                                writePE2(GPIOYY, (temp_GPIOYY | 0x02));
-                            } else writePE2(GPIOYY, (temp_GPIOYY & 0xfd));
+                                writePE2(GPIOY, (temp_GPIOYY | 0x02));
+                            } else writePE2(GPIOY, (temp_GPIOYY & 0xfd));
                             break;
                         case X:
                             if(press[current_press].buttonState == 1){
@@ -456,22 +456,22 @@ static PT_THREAD (protothread_playback(struct pt *pt))
                             
                         case RT:
                             if(press[current_press].buttonState == 1){
-                                writePE2(GPIOZZ, (temp_GPIOZZ | 0x02));
-                            } else writePE2(GPIOZZ, (temp_GPIOZZ & 0xfd));
+                                writePE2(GPIOZ, (temp_GPIOZZ | 0x02));
+                            } else writePE2(GPIOZ, (temp_GPIOZZ & 0xfd));
                             break;
                         case RB:
                             if(press[current_press].buttonState == 1){
-                                writePE2(GPIOZZ, (temp_GPIOZZ | 0x08));
-                            } else writePE2(GPIOZZ, (temp_GPIOZZ & 0xf7));
+                                writePE2(GPIOZ, (temp_GPIOZZ | 0x08));
+                            } else writePE2(GPIOZ, (temp_GPIOZZ & 0xf7));
                             break;
                         case LT:
                             if(press[current_press].buttonState == 1){
-                                writePE2(GPIOZZ, (temp_GPIOZZ | 0x20));
-                            } else writePE2(GPIOZZ, (temp_GPIOZZ & 0xdf));
+                                writePE2(GPIOZ, (temp_GPIOZZ | 0x20));
+                            } else writePE2(GPIOZ, (temp_GPIOZZ & 0xdf));
                         case LB:
                             if(press[current_press].buttonState == 1){
-                                writePE2(GPIOZZ, (temp_GPIOZZ | 0x80));
-                            } else writePE2(GPIOZZ, (temp_GPIOZZ & 0x7f));
+                                writePE2(GPIOZ, (temp_GPIOZZ | 0x80));
+                            } else writePE2(GPIOZ, (temp_GPIOZZ & 0x7f));
                             break; 
                     
                     }
@@ -481,14 +481,60 @@ static PT_THREAD (protothread_playback(struct pt *pt))
                     state_flag = 0;
                     writePE(GPIOY, 0x00);
                     writePE(GPIOZ, 0x00);
-                    writePE2(GPIOYY, 0x00);
-                    writePE2(GPIOZZ, 0x00);
+                    writePE2(GPIOY, 0x00);
+                    writePE2(GPIOZ, 0x00);
                 }
             } else current_press = 0;
         }
     PT_END(pt);
 }
 
+static PT_THREAD (protothread_spitest(struct pt *pt))
+{
+    static int ledtoggle = 0;
+    static int buttonPressY, buttonPressYY;
+    static int yPressed, xPressed;
+    PT_BEGIN(pt);
+    while(1){
+        PT_YIELD_TIME_msec(8);
+        buttonPressY = readPE(GPIOY);
+        //buttonPressYY = readPE2(GPIOY);
+        if ((!(buttonPressY & 0x01)) && !yPressed ) {
+            //mPORTAToggleBits(BIT_0);
+            yPressed = 1;
+            writePE(GPIOY, 0x08);
+        } else if ((buttonPressY & 0x01) && yPressed){
+            yPressed = 0;
+            writePE(GPIOY, 0x00);
+        }
+        if ((!(buttonPressY & 0x04)) && !xPressed) {
+            xPressed = 1;
+            mPORTASetBits(BIT_2);
+            
+        }else if (((buttonPressY & 0x04)) && xPressed) {
+            xPressed = 0;
+            mPORTAClearBits(BIT_2);
+        }
+    }
+    PT_END(pt);
+}
+
+static PT_THREAD (protothread_spitest2(struct pt *pt))
+{
+    static int ledtoggle = 0;
+    PT_BEGIN(pt);
+    while(1){
+        PT_YIELD_TIME_msec(100);
+        if(ledtoggle){
+            writePE(GPIOY, 0xff);
+            ledtoggle = 0;
+        } else{
+            writePE(GPIOY, 0x00);
+            ledtoggle = 1;
+        }
+    }
+    PT_END(pt);
+}
 
 static PT_THREAD (protothread_anim(struct pt *pt))
 {
@@ -498,9 +544,9 @@ static PT_THREAD (protothread_anim(struct pt *pt))
      printLine(0, buffer, ILI9340_WHITE, ILI9340_BLACK);
      
      // set up LED to blink
-     mPORTAClearBits(BIT_4 );	//Clear bits to ensure light is off.
-     mPORTASetPinsDigitalOut(BIT_4 );    //Set port as output
-     mPORTAClearBits(BIT_4 );
+     mPORTAClearBits(BIT_2 );	//Clear bits to ensure light is off.
+     mPORTASetPinsDigitalOut(BIT_2 );    //Set port as output
+     mPORTAClearBits(BIT_2);
       while(1) {
         // yield time 1 second
         PT_YIELD_TIME_msec(8) ;
@@ -531,7 +577,6 @@ int main(void) {
     
     PT_setup();
     initPE();
-    initPE2();
     
     INTEnableSystemMultiVectoredInt();
     // PortY on Expander ports as digital outputs
@@ -540,14 +585,13 @@ int main(void) {
     mPortYSetPinsIn(BIT_0 | BIT_2 | BIT_4 | BIT_6);    //Set port as input
     mPortZSetPinsIn(BIT_0 | BIT_1 | BIT_2);    //Set port as input
     // PortYY on Expander ports as digital outputs
-    mPortYYSetPinsOut(BIT_1 | BIT_3 | BIT_5 | BIT_7);    //Set port as output
+    mPortYSetPinsOut2(BIT_1 | BIT_3 | BIT_5 | BIT_7);    //Set port as output
     // PortYY as inputs
-    mPortYYSetPinsIn(BIT_0 | BIT_2 | BIT_4 | BIT_6);    //Set port as input
+    mPortYSetPinsIn2(BIT_0 | BIT_2 | BIT_4 | BIT_6);    //Set port as input
     // PortZZ on Expander ports as digital outputs
-    mPortZZSetPinsOut(BIT_1 | BIT_3 | BIT_5 | BIT_7);    //Set port as output
+    mPortZSetPinsOut2(BIT_1 | BIT_3 | BIT_5 | BIT_7);    //Set port as output
     // PortZZ as inputs
-    mPortZZSetPinsIn(BIT_0 | BIT_2 | BIT_4 | BIT_6);    //Set port as input
-    
+    mPortZSetPinsIn2(BIT_0 | BIT_2 | BIT_4 | BIT_6);    //Set port as input
     
    // mPortYEnablePullUp(BIT_0);
 //    tft_init_hw();
@@ -555,24 +599,25 @@ int main(void) {
 //    tft_fillScreen(ILI9340_BLACK);
 //    //240x320 vertical display
 //    tft_setRotation(0); // Use tft_setRotation(1) for 320x240    
-    mPORTAClearBits(BIT_4);	//Clear bits to ensure light is off.
-    mPORTASetPinsDigitalOut(BIT_4);    //Set port as output
-
-    writePE(GPIOY, 0xff);
+    mPORTAClearBits(BIT_2);	//Clear bits to ensure light is off.
+    mPORTASetPinsDigitalOut(BIT_2);    //Set port as output
     writePE(GPIOY, 0x00);
-    writePE2(GPIOZZ, (0xff));
-    writePE2(GPIOZZ, 0x00);
-    
-    PT_INIT(&pt_key);
+    writePE2(GPIOY, 0x00);
+    writePE2(GPIOZ, 0x00);
+
+    //PT_INIT(&pt_key);
 //    PT_INIT(&pt_anim);
-    PT_INIT(&pt_record);
-    PT_INIT(&pt_playback);
+    //PT_INIT(&pt_record);
+    //PT_INIT(&pt_playback);
+    //PT_INIT(&pt_spitest);
+    PT_INIT(&pt_spitest2);
     while (1) {
-        PT_SCHEDULE(protothread_key(&pt_key));      
-//        PT_SCHEDULE(protothread_anim(&pt_anim));    
-        PT_SCHEDULE(protothread_record(&pt_record));
-        
-        PT_SCHEDULE(protothread_playback(&pt_playback));        
+     //   PT_SCHEDULE(protothread_key(&pt_key));      
+     //   PT_SCHEDULE(protothread_anim(&pt_anim));    
+     //  PT_SCHEDULE(protothread_record(&pt_record));
+       //PT_SCHEDULE(protothread_spitest(&pt_spitest));
+        PT_SCHEDULE(protothread_spitest2(&pt_spitest2));
+     //   PT_SCHEDULE(protothread_playback(&pt_playback));        
     }
     
 }

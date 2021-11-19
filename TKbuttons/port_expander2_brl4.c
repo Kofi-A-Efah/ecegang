@@ -21,44 +21,44 @@ inline void SPI1_Mode32(void){  // configure SPI2 for 32-bit mode
     SPI1CONSET = 0x800;
 }
 
-void initPE() {
+void initPE2() {
   // control CS for DAC
   volatile SpiChannel pe_spi = SPI_CHANNEL1;
   volatile int spiClkDiv = 4; // 10 MHz max speed for this DAC
-  mPORTASetPinsDigitalOut(BIT_0); // use RPB9 (pin 21)
-  mPORTASetBits(BIT_0); // CS active low
-  PPSOutput(2, RPB1, SDO1); // use RPB5 (pin 14) for SDO2
-  PPSInput(3, SDI1,RPA1); // SDI2
+  mPORTASetPinsDigitalOut(BIT_0); // use RA0 (pin 21)
+  mPORTASetBits(BIT_0); // RA0 (CS) active low
+  PPSOutput(2, RPB1, SDO1); // use RPB1 (pin 14) for SDO2
+  PPSInput(2, SDI1,RPA1); // SDI2
   
   SpiChnOpen(pe_spi, SPI_OPEN_ON | SPI_OPEN_MODE8 | SPI_OPEN_MSTEN | SPI_OPEN_CKE_REV, spiClkDiv);
   
-  writePE(IOCON, ( CLEAR_BANK   | CLEAR_MIRROR | SET_SEQOP |
+  writePE2(IOCON, ( CLEAR_BANK   | CLEAR_MIRROR | SET_SEQOP |
                    CLEAR_DISSLW | CLEAR_HAEN   | CLEAR_ODR |
                    CLEAR_INTPOL ));
 }
 
-void clearBits(unsigned char addr, unsigned char bitmask){
+void clearBits2(unsigned char addr, unsigned char bitmask){
   if (addr <= 0x15){
     unsigned char cur_val = readPE(addr);
-    writePE(addr, cur_val & (~bitmask));
+    writePE2(addr, cur_val & (~bitmask));
   }
 }
 
-void setBits(unsigned char addr, unsigned char bitmask){
+void setBits2(unsigned char addr, unsigned char bitmask){
   if (addr <= 0x15){
     unsigned char cur_val = readPE(addr);
-    writePE(addr, cur_val | (bitmask));
+    writePE2(addr, cur_val | (bitmask));
   }
 }
 
-void toggleBits(unsigned char addr, unsigned char bitmask){
+void toggleBits2(unsigned char addr, unsigned char bitmask){
   if (addr <= 0x15){
     unsigned char cur_val = readPE(addr);
-    writePE(addr, cur_val ^ (bitmask));
+    writePE2(addr, cur_val ^ (bitmask));
   }
 }
 
-unsigned char readBits(unsigned char addr, unsigned char bitmask){
+unsigned char readBits2(unsigned char addr, unsigned char bitmask){
   if (addr <= 0x15){
     unsigned char cur_val = readPE(addr) & bitmask ;
     return cur_val ;
@@ -113,7 +113,7 @@ void mPortZZDisablePullUp(unsigned char bitmask){
   clearBits(GPPUZZ, bitmask);
 }
 
-inline void writePE(unsigned char reg_addr, unsigned char data) {
+inline void writePE2(unsigned char reg_addr, unsigned char data) {
   unsigned char junk = 0;
    
   // test for ready
@@ -144,7 +144,7 @@ inline void writePE(unsigned char reg_addr, unsigned char data) {
   
 }
 
-inline unsigned char readPE(unsigned char reg_addr) {
+inline unsigned char readPE2(unsigned char reg_addr) {
   unsigned char out = 0;
   
   // test for ready
@@ -165,7 +165,7 @@ inline unsigned char readPE(unsigned char reg_addr) {
   while (TxBufFullSPI1());
   // 8-bits
   
-  WriteSPI2(reg_addr);
+  WriteSPI1(reg_addr);
   while (SPI1STATbits.SPIBUSY); // wait for byte to be sent
   out = ReadSPI1(); // junk
   // One byte of dummy data to write to register
