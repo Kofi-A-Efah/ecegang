@@ -22,8 +22,8 @@
 ////////////////////////////////////
 // graphics libraries
 // SPI channel 1 connections to TFT
-#include "tft_master.h"
-#include "tft_gfx.h"
+//#include "tft_master.h"
+//#include "tft_gfx.h"
 // need for rand function
 #include <stdlib.h>
 // need for sine function
@@ -73,21 +73,21 @@ void __ISR(_TIMER_2_VECTOR, ipl2) Timer2Handler(void) {
         sys_time_frame++;   
     } else sys_time_frame = 0;
 }
-char buffer[60];
-int sys_time_seconds;
-void printLine(int line_number, char* print_buffer, short text_color, short back_color){
-    // line number 0 to 31 
-    /// !!! assumes tft_setRotation(0);
-    // print_buffer is the string to print
-    int v_pos;
-    v_pos = line_number * 10 ;
-    // erase the pixels
-    tft_fillRoundRect(0, v_pos, 239, 8, 1, back_color);// x,y,w,h,radius,color
-    tft_setTextColor(text_color); 
-    tft_setCursor(0, v_pos);
-    tft_setTextSize(1);
-    tft_writeString(print_buffer);
-}
+//char buffer[60];
+//int sys_time_seconds;
+//void printLine(int line_number, char* print_buffer, short text_color, short back_color){
+//    // line number 0 to 31 
+//    /// !!! assumes tft_setRotation(0);
+//    // print_buffer is the string to print
+//    int v_pos;
+//    v_pos = line_number * 10 ;
+//    // erase the pixels
+//    tft_fillRoundRect(0, v_pos, 239, 8, 1, back_color);// x,y,w,h,radius,color
+//    tft_setTextColor(text_color); 
+//    tft_setCursor(0, v_pos);
+//    tft_setTextSize(1);
+//    tft_writeString(print_buffer);
+//}
 static PT_THREAD (protothread_key(struct pt *pt))
 {
     PT_BEGIN(pt);
@@ -536,35 +536,35 @@ static PT_THREAD (protothread_spitest2(struct pt *pt))
     PT_END(pt);
 }
 
-static PT_THREAD (protothread_anim(struct pt *pt))
-{
-    PT_BEGIN(pt);
-     // timer readout
-     sprintf(buffer,"%s", "Time in sec since boot\n");
-     printLine(0, buffer, ILI9340_WHITE, ILI9340_BLACK);
-     
-     // set up LED to blink
-     mPORTAClearBits(BIT_2 );	//Clear bits to ensure light is off.
-     mPORTASetPinsDigitalOut(BIT_2 );    //Set port as output
-     mPORTAClearBits(BIT_2);
-      while(1) {
-        // yield time 1 second
-        PT_YIELD_TIME_msec(8) ;
-        sys_time_seconds++ ;
-        // toggle the LED on the big board
-  //      mPORTAToggleBits(BIT_0);
-        
-        // draw sys_time
-        sprintf(buffer,"%d", sys_time_seconds);
-        printLine(1, buffer, ILI9340_YELLOW, ILI9340_BLACK);
-        sprintf(buffer, "%d", state_flag);
-        printLine(3,buffer,ILI9340_YELLOW,ILI9340_BLACK);
-        
-          
-        // !!!! NEVER exit while !!!!
-      } // END WHILE(1)
-  PT_END(pt);
-} // animation thread
+//static PT_THREAD (protothread_anim(struct pt *pt))
+//{
+//    PT_BEGIN(pt);
+//     // timer readout
+//     sprintf(buffer,"%s", "Time in sec since boot\n");
+//     printLine(0, buffer, ILI9340_WHITE, ILI9340_BLACK);
+//     
+//     // set up LED to blink
+//     mPORTAClearBits(BIT_2 );	//Clear bits to ensure light is off.
+//     mPORTASetPinsDigitalOut(BIT_2 );    //Set port as output
+//     mPORTAClearBits(BIT_2);
+//      while(1) {
+//        // yield time 1 second
+//        PT_YIELD_TIME_msec(8) ;
+//        sys_time_seconds++ ;
+//        // toggle the LED on the big board
+//  //      mPORTAToggleBits(BIT_0);
+//        
+//        // draw sys_time
+//        sprintf(buffer,"%d", sys_time_seconds);
+//        printLine(1, buffer, ILI9340_YELLOW, ILI9340_BLACK);
+//        sprintf(buffer, "%d", state_flag);
+//        printLine(3,buffer,ILI9340_YELLOW,ILI9340_BLACK);
+//        
+//          
+//        // !!!! NEVER exit while !!!!
+//      } // END WHILE(1)
+//  PT_END(pt);
+//} // animation thread
 
 int main(void) {    
     // RB2 - input // when low set B1 high
