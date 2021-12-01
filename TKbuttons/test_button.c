@@ -429,28 +429,28 @@ static PT_THREAD (protothread_playback(struct pt *pt))
                         case left:
                             if ( state_flag = 3 && left_right == 0  ) {
                                 if(press[current_press].buttonState == 1){
-                                    writePE(GPIOY, (temp_GPIOY | 0x20));
-                                } else writePE(GPIOY, (temp_GPIOY & 0xdf));
+                                    writePE(GPIOY, (temp_GPIOY | 0x08));
+                                } else writePE(GPIOY, (temp_GPIOY & 0xf7));
                             }
                             else if(press[current_press].buttonState == 1){
-                                writePE(GPIOY, (temp_GPIOY | 0x08));
+                                writePE(GPIOY, (temp_GPIOY | 0x80));
                             } else writePE(GPIOY, (temp_GPIOY & 0x7f));
                             break;
                         case right:
                             if (state_flag = 3 && left_right == 0 ) {
                                 if(press[current_press].buttonState == 1){
-                                    writePE(GPIOY, (temp_GPIOY | 0x08));
-                                } else writePE(GPIOY, (temp_GPIOY & 0x7f));
+                                    writePE(GPIOY, (temp_GPIOY | 0x20));
+                                } else writePE(GPIOY, (temp_GPIOY & 0xdf));
                             }
                             else if(press[current_press].buttonState == 1){
-                                writePE(GPIOY, (temp_GPIOY | 0x20));
-                            } else writePE(GPIOY, (temp_GPIOY & 0xdf));
+                                writePE(GPIOY, (temp_GPIOY | 0x80));
+                            } else writePE(GPIOY, (temp_GPIOY & 0x7f));
                             break;
                         case down:
                             if(press[current_press].buttonState == 1){
                                 writePE(GPIOY, (temp_GPIOY | 0x80));
                             } else writePE(GPIOY, (temp_GPIOY & 0x7f));
-                            break;  
+                            break;   
                             
                         //RT RB LT LB Buttons   
                             
@@ -502,19 +502,23 @@ static PT_THREAD (protothread_spitest(struct pt *pt))
         if ((!(buttonPressY & 0x01)) && !yPressed ) {
             //mPORTAToggleBits(BIT_0);
             yPressed = 1;
-            writePE(GPIOY, 0x08);
-        } else if ((buttonPressY & 0x01) && yPressed){
+            writePE2(GPIOY, 0x08);
+        } // bit 4
+        else if ((buttonPressY & 0x01) && yPressed){
             yPressed = 0;
-            writePE(GPIOY, 0x00);
+            writePE2(GPIOY, 0x10 );
         }
+                
         if ((!(buttonPressY & 0x04)) && !xPressed) {
             xPressed = 1;
             mPORTASetBits(BIT_2);
             
-        }else if (((buttonPressY & 0x04)) && xPressed) {
+        }
+        else if (((buttonPressY & 0x04)) && xPressed) {
             xPressed = 0;
             mPORTAClearBits(BIT_2);
         }
+        
     }
     PT_END(pt);
 }
@@ -527,9 +531,13 @@ static PT_THREAD (protothread_spitest2(struct pt *pt))
         PT_YIELD_TIME_msec(100);
         if(ledtoggle){
             writePE(GPIOY, 0xff);
+            writePE2(GPIOZ, 0xff);
+            writePE2(GPIOY, 0xff);
             ledtoggle = 0;
         } else{
             writePE(GPIOY, 0x00);
+            writePE2(GPIOZ, 0x00);
+            writePE2(GPIOY, 0x00);
             ledtoggle = 1;
         }
     }
@@ -612,12 +620,12 @@ int main(void) {
     //PT_INIT(&pt_spitest);
     PT_INIT(&pt_spitest2);
     while (1) {
-     //   PT_SCHEDULE(protothread_key(&pt_key));      
+        PT_SCHEDULE(protothread_key(&pt_key));      
      //   PT_SCHEDULE(protothread_anim(&pt_anim));    
-     //  PT_SCHEDULE(protothread_record(&pt_record));
+       PT_SCHEDULE(protothread_record(&pt_record));
        //PT_SCHEDULE(protothread_spitest(&pt_spitest));
-        PT_SCHEDULE(protothread_spitest2(&pt_spitest2));
-     //   PT_SCHEDULE(protothread_playback(&pt_playback));        
+        //PT_SCHEDULE(protothread_spitest2(&pt_spitest2));
+        PT_SCHEDULE(protothread_playback(&pt_playback));        
     }
     
 }
