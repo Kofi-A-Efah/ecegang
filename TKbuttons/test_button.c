@@ -113,6 +113,7 @@ static PT_THREAD (protothread_key(struct pt *pt))
 
     //PORTYY
     // B Y A X
+    
     // Y IS 0 & 1
     // X IS 2 & 3
     // A IS 4 & 5
@@ -120,10 +121,10 @@ static PT_THREAD (protothread_key(struct pt *pt))
 
     // PORTZZ
     // LT LB RT RB
-    // RT 0 & 1
-    // RB 2 & 3
-    // LB 4 & 5
-    // LT 6 & 7
+    // RT 0 & 1  RED
+    // RB 2 & 3 YELLOW
+    // LB 4 & 5 GREEN
+    // LT 6 & 7 BLUE
     static int buttonPressesY;
     static int buttonPressesZ;
     static int buttonPressesYY;
@@ -145,10 +146,10 @@ static PT_THREAD (protothread_key(struct pt *pt))
         if ((!(buttonPressesYY & 0x01)) && !yPressed ) {
             //mPORTAToggleBits(BIT_0);
             yPressed = 1;
-            if(state_flag == 1) rec_add_button(B, sys_time_frame, 1);
+            if(state_flag == 1) rec_add_button(Y, sys_time_frame, 1);
         } else if ((buttonPressesYY & 0x01) && yPressed){
             yPressed = 0;
-            if(state_flag == 1) rec_add_button(B, sys_time_frame, 0);
+            if(state_flag == 1) rec_add_button(Y, sys_time_frame, 0);
         }
         
         //X button read
@@ -171,7 +172,7 @@ static PT_THREAD (protothread_key(struct pt *pt))
         
         //B button read
         if ((!(buttonPressesYY & 0x40)) && !bPressed) {
-            aPressed = 1;
+            bPressed = 1;
             if(state_flag == 1) rec_add_button(B, sys_time_frame, 1);
         }else if (((buttonPressesYY & 0x40)) && bPressed) {
             bPressed = 0;
@@ -230,10 +231,10 @@ static PT_THREAD (protothread_key(struct pt *pt))
         //RB button read
         if ((!(buttonPressesZZ & 0x04)) && !rbPressed) {
             rbPressed = 1;
-            if(state_flag == 1) rec_add_button(LT, sys_time_frame, 1);
+            if(state_flag == 1) rec_add_button(RB, sys_time_frame, 1);
         }else if (((buttonPressesZZ & 0x04)) && rbPressed) {
             rbPressed = 0;
-            if(state_flag == 1) rec_add_button(LT, sys_time_frame, 0);
+            if(state_flag == 1) rec_add_button(RB, sys_time_frame, 0);
         }       
         
         //LT button read
@@ -295,9 +296,10 @@ static PT_THREAD (protothread_record(struct pt *pt))
            // Turn on record light            
         } else if (((butt_press & 0x02))) recPressed = 0;
         
+  
         
         //end recording left
-        if ( state_flag == 1 && !( butt_press & 0x01 ) && !playLeftPressed ) { 
+        else if ( state_flag == 1 && !( butt_press & 0x01 ) && !playLeftPressed ) { 
              left_right = 0;
              int i; 
              presscount = temp_presscount;
@@ -312,9 +314,7 @@ static PT_THREAD (protothread_record(struct pt *pt))
         } else if ( butt_press & 0x01 ) playLeftPressed = 0;
         
 
-        // END RECORDING RIGHT
-        
-        
+        // END RECORDING RIGHT 
         if ( state_flag == 1 && !( butt_press & 0x04 ) && !playRightPressed ) { 
              left_right = 1;
              int i; 
@@ -342,13 +342,12 @@ static PT_THREAD (protothread_record(struct pt *pt))
         
        
         //playback right        
-        if ( state_flag == 0 && !( butt_press & 0x04 ) ) { 
+        if ( state_flag == 0 && !( butt_press & 0x04 ) && !playRightPressed) { 
             sys_time_frame = 0;
             start_frame_timing = 1;
             if (presscount != 0) {
               state_flag = 3;   
-            }
-                        
+            }  
             playRightPressed = 1;      
         } else if ( butt_press & 0x04 ) playRightPressed = 1;
         
@@ -413,6 +412,7 @@ static PT_THREAD (protothread_playback(struct pt *pt))
                             if(press[current_press].buttonState == 1){
                                 writePE2(GPIOY, (temp_GPIOYY | 0x20));
                             } else writePE2(GPIOY, (temp_GPIOYY & 0xdf));
+                            break;
                         case B:
                             if(press[current_press].buttonState == 1){
                                 writePE2(GPIOY, (temp_GPIOYY | 0x80));
@@ -420,37 +420,39 @@ static PT_THREAD (protothread_playback(struct pt *pt))
                             break;
 
 // reverse directions depending on which playback is pressed                             
-                            
+// facing left: left_right = 0
+// facing right: left_right = 1                            
+
                         case up:
                             if(press[current_press].buttonState == 1){
                                 writePE(GPIOY, (temp_GPIOY | 0x02));
                             } else writePE(GPIOY, (temp_GPIOY & 0xfd));
                             break;       
                         case left:
-                            if ( state_flag = 3 && left_right == 0  ) {
-                                if(press[current_press].buttonState == 1){
-                                    writePE(GPIOY, (temp_GPIOY | 0x08));
-                                } else writePE(GPIOY, (temp_GPIOY & 0xf7));
-                            }
-                            else if(press[current_press].buttonState == 1){
-                                writePE(GPIOY, (temp_GPIOY | 0x80));
-                            } else writePE(GPIOY, (temp_GPIOY & 0x7f));
-                            break;
-                        case right:
-                            if (state_flag = 3 && left_right == 0 ) {
+                            if ( state_flag == 3 && left_right == 0  ) {
                                 if(press[current_press].buttonState == 1){
                                     writePE(GPIOY, (temp_GPIOY | 0x20));
                                 } else writePE(GPIOY, (temp_GPIOY & 0xdf));
                             }
                             else if(press[current_press].buttonState == 1){
-                                writePE(GPIOY, (temp_GPIOY | 0x80));
-                            } else writePE(GPIOY, (temp_GPIOY & 0x7f));
+                                writePE(GPIOY, (temp_GPIOY | 0x08));
+                            } else writePE(GPIOY, (temp_GPIOY & 0xf7));
+                            break;
+                        case right:
+                            if (state_flag == 3 && left_right == 0 ) {
+                                if(press[current_press].buttonState == 1){
+                                    writePE(GPIOY, (temp_GPIOY | 0x08));
+                                } else writePE(GPIOY, (temp_GPIOY & 0xf7));
+                            }
+                            else if(press[current_press].buttonState == 1){
+                                writePE(GPIOY, (temp_GPIOY | 0x20));
+                            } else writePE(GPIOY, (temp_GPIOY & 0xdf));
                             break;
                         case down:
                             if(press[current_press].buttonState == 1){
                                 writePE(GPIOY, (temp_GPIOY | 0x80));
                             } else writePE(GPIOY, (temp_GPIOY & 0x7f));
-                            break;   
+                            break;  
                             
                         //RT RB LT LB Buttons   
                             
