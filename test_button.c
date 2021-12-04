@@ -369,7 +369,7 @@ static PT_THREAD (protothread_playback(struct pt *pt))
                     prev_GPIOYY = temp_GPIOYY;
                     prev_GPIOZZ = temp_GPIOZZ;
                 }
-                if((prev_GPIOY != temp_GPIOY) || (prev_GPIOYY != temp_GPIOYY)
+                if((prev_GPIOYY != temp_GPIOYY)
                         || (prev_GPIOZZ != temp_GPIOZZ)){
                     state_flag = 0;
                     writePE(GPIOY, 0x00);
